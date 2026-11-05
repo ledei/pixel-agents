@@ -318,6 +318,10 @@ jobs:
       - name: Build Webview
         run: npm run build:webview
 
+      # The obsidian e2e area loads the assembled plugin (dist/obsidian).
+      - name: Build Obsidian Plugin
+        run: npm run build:obsidian
+
       # Skip the ~250 MB chromium download when the browser cache hit; only run
       # `install-deps` on Linux (macOS/Windows ship the required system libs, so
       # the old unconditional `--with-deps` just burned ~30 s for a no-op).
