@@ -75,7 +75,15 @@ function groupByArea(specs) {
     groups.get(area).push(spec);
   }
   // Sort areas: known ones in a defined order, then alphabetical, "uncategorized" last
-  const KNOWN_ORDER = ['spawn', 'lifecycle', 'cross-cutting', 'teams', 'matrix', 'standalone'];
+  const KNOWN_ORDER = [
+    'spawn',
+    'lifecycle',
+    'cross-cutting',
+    'teams',
+    'matrix',
+    'standalone',
+    'obsidian',
+  ];
   const sorted = new Map();
   for (const known of KNOWN_ORDER) {
     if (groups.has(known)) sorted.set(known, groups.get(known));

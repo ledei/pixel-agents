@@ -12,6 +12,7 @@ const AREA_TO_EPIC: Record<string, string> = {
   teams: 'Teams routing',
   matrix: 'Hooks-off matrix',
   standalone: 'Standalone server',
+  obsidian: 'Obsidian adapter',
   pets: 'Pet system',
   carpet: 'Carpet system',
   areas: 'Areas (zoning) system',
