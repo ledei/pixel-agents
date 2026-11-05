@@ -1,8 +1,8 @@
 /**
- * FileStateAdapter: shared StateAdapter implementation for both VS Code and standalone.
+ * FileStateAdapter: shared StateAdapter implementation for VS Code, standalone and Obsidian.
  *
  * Settings (per adapter namespace) persist to
- *   ~/.pixel-agents/config.json  under keys "vscode" or "standalone".
+ *   ~/.pixel-agents/config.json  under keys "vscode", "standalone" or "obsidian".
  *
  * Agents + seats (per adapter) persist to
  *   ~/.pixel-agents/<namespace>-state.json

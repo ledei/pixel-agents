@@ -94,6 +94,55 @@ describe('FileStateAdapter', () => {
     expect(parsed.standalone.watchAllSessions).toBe(false);
   });
 
+  it('obsidian namespace is isolated from vscode and standalone, and round-trips settings', () => {
+    const obsidian = new FileStateAdapter({ namespace: 'obsidian' });
+    const vscode = new FileStateAdapter({ namespace: 'vscode' });
+    const standalone = new FileStateAdapter({ namespace: 'standalone' });
+
+    obsidian.setSetting('pixel-agents.soundEnabled', false);
+    obsidian.setSetting('pixel-agents.lastSeenVersion', '1.5');
+    obsidian.setSetting('pixel-agents.watchAllSessions', false);
+
+    expect(obsidian.getSetting('pixel-agents.soundEnabled', true)).toBe(false);
+    expect(obsidian.getSetting('pixel-agents.lastSeenVersion', '')).toBe('1.5');
+    expect(obsidian.getSetting('pixel-agents.watchAllSessions', true)).toBe(false);
+    expect(vscode.getSetting('pixel-agents.soundEnabled', false)).toBe(true);
+    expect(standalone.getSetting('pixel-agents.lastSeenVersion', 'x')).toBe('');
+
+    standalone.setSetting('pixel-agents.alwaysShowLabels', true);
+    expect(obsidian.getSetting('pixel-agents.alwaysShowLabels', true)).toBe(false);
+
+    const configPath = path.join(tempHome, '.pixel-agents', 'config.json');
+    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(parsed.obsidian.soundEnabled).toBe(false);
+    expect(parsed.obsidian.lastSeenVersion).toBe('1.5');
+    expect(parsed.standalone.soundEnabled).toBe(true);
+  });
+
+  it('watchAllSessions defaults to true for obsidian only', () => {
+    expect(
+      new FileStateAdapter({ namespace: 'obsidian' }).getSetting(
+        'pixel-agents.watchAllSessions',
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      new FileStateAdapter({ namespace: 'vscode' }).getSetting(
+        'pixel-agents.watchAllSessions',
+        true,
+      ),
+    ).toBe(false);
+    expect(
+      new FileStateAdapter({ namespace: 'standalone' }).getSetting(
+        'pixel-agents.watchAllSessions',
+        true,
+      ),
+    ).toBe(false);
+  });
+
   it('ignores unknown setting keys (returns default, does not write)', () => {
     const adapter = new FileStateAdapter({ namespace: 'standalone' });
     expect(adapter.getSetting('pixel-agents.unknownKey', 'fallback')).toBe('fallback');
@@ -163,6 +212,22 @@ describe('FileStateAdapter', () => {
     standalone.saveAgents(agentSa);
     expect(vscode.loadAgents()).toEqual(agentVs);
     expect(standalone.loadAgents()).toEqual(agentSa);
+  });
+
+  it('obsidian state is written to obsidian-state.json and independent of the others', () => {
+    const obsidian = new FileStateAdapter({ namespace: 'obsidian' });
+    const standalone = new FileStateAdapter({ namespace: 'standalone' });
+    const agents: PersistedAgent[] = [
+      { id: 4, terminalName: '', jsonlFile: '/o.jsonl', projectDir: '/vault' },
+    ];
+    obsidian.saveAgents(agents);
+    obsidian.saveSeats({ '4': { palette: 1, seatId: 's1' } });
+
+    expect(fs.existsSync(path.join(tempHome, '.pixel-agents', 'obsidian-state.json'))).toBe(true);
+    expect(obsidian.loadAgents()).toEqual(agents);
+    expect(obsidian.loadSeats()).toEqual({ '4': { palette: 1, seatId: 's1' } });
+    expect(standalone.loadAgents()).toEqual([]);
+    expect(standalone.loadSeats()).toEqual({});
   });
 
   it('preserves seats when saving agents (and vice versa)', () => {
