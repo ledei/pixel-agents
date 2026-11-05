@@ -56,7 +56,7 @@ server/                              Lifecycle runtime + Fastify HTTP/WS server
     clientMessageHandler.ts          Single dispatch point for ClientMessage from webview
     server.ts                        Top-level composition
     office.ts                        startOffice(): the shared composition (assets, store, runtime, server, hooks, scanning) for standalone and Obsidian; never reads process.cwd() or exits
-    cli.ts                           npx pixel-agents entry (npm bin): args, URL printing, signals, exit
+    cli.ts                           npx pixel-agents entry (npm bin): args, terminals (in process or --pty-host), URL printing, signals, exit
     fileStateAdapter.ts              Namespaced ~/.pixel-agents/ persistence
     configPersistence.ts             { vscode, standalone, obsidian, externalAssetDirectories, hooksConsent: {providerId: granted|declined}, hooksEnabled: {providerId: boolean} }
     layoutPersistence.ts             ~/.pixel-agents/layout.json with atomic tmp+rename

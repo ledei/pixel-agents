@@ -103,17 +103,17 @@ Vite will print a local URL (typically `http://localhost:5173`) where the mocked
 
 Pixel Agents uses a layered codebase. `core/` depends on nothing; `server/` and `webview-ui/` depend only on `core/`; `adapters/vscode/` and `adapters/obsidian/` depend on `core/` and `server/`, and never on each other.
 
-| Directory                   | Description                                                                                                                                                                                                                                           |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core/`                     | Protocol + interface definitions (AsyncAPI 3.0 contract, HookProvider, MessageTransport, StateAdapter). Zero runtime side effects.                                                                                                                    |
-| `server/`                   | Lifecycle runtime: `AgentRuntime`, `AgentStateStore`, `SessionRouter`, `DismissalTracker`, Fastify HTTP/WS server, file watching, transcript parsing, hook installer, providers, Vitest test suite. Also ships the `npx pixel-agents` standalone CLI. |
-| `adapters/vscode/`          | VS Code surface — `extension.ts`, `WebviewViewProvider`, terminal lifecycle, one-time state migration. Composes `core/` and `server/`.                                                                                                                |
-| `adapters/obsidian/`        | Obsidian plugin — `main.ts`, an `ItemView` that embeds the office, and a lifecycle that starts it with the first view and stops it with the last. Composes `core/` and `server/` via `startOffice`.                                                   |
-| `webview-ui/`               | React 19 + Canvas UI. Transport abstraction (`PostMessageTransport` + `WebSocketTransport`). Depends only on `core/`.                                                                                                                                 |
-| `webview-ui/public/assets/` | Bundled sprites, furniture catalog, default layout, fonts.                                                                                                                                                                                            |
-| `scripts/`                  | Build/CI tooling: `generate-messages.ts` (AsyncAPI → TS), `run-e2e.mjs`, `build-allure-report.mjs`, `assemble-vercel-output.mjs`, and the asset extraction pipeline.                                                                                  |
-| `e2e/`                      | Playwright suite — fixtures, helpers, specs for `claude/hooks-on/`, `claude/hooks-off/`, and `standalone/`.                                                                                                                                           |
-| `eslint-rules/`             | Custom rules (`no-inline-colors`, `pixel-shadow`, `pixel-font`) enforced project-wide.                                                                                                                                                                |
+| Directory                   | Description                                                                                                                                                                                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `core/`                     | Protocol + interface definitions (AsyncAPI 3.0 contract, HookProvider, MessageTransport, StateAdapter). Zero runtime side effects.                                                                                                                                                                                                   |
+| `server/`                   | Lifecycle runtime: `AgentRuntime`, `AgentStateStore`, `SessionRouter`, `DismissalTracker`, Fastify HTTP/WS server, file watching, transcript parsing, hook installer, providers, Vitest test suite. Also ships the `npx pixel-agents` standalone CLI; `startOffice` (`office.ts`) is the office composition it shares with Obsidian. |
+| `adapters/vscode/`          | VS Code surface — `extension.ts`, `WebviewViewProvider`, terminal lifecycle, one-time state migration. Composes `core/` and `server/`.                                                                                                                                                                                               |
+| `adapters/obsidian/`        | Obsidian plugin — `main.ts`, an `ItemView` that embeds the office, and a lifecycle that starts it with the first view and stops it with the last. Composes `core/` and `server/` via `startOffice`.                                                                                                                                  |
+| `webview-ui/`               | React 19 + Canvas UI. Transport abstraction (`PostMessageTransport` + `WebSocketTransport`). Depends only on `core/`.                                                                                                                                                                                                                |
+| `webview-ui/public/assets/` | Bundled sprites, furniture catalog, default layout, fonts.                                                                                                                                                                                                                                                                           |
+| `scripts/`                  | Build/CI tooling: `generate-messages.ts` (AsyncAPI → TS), `run-e2e.mjs`, `build-allure-report.mjs`, `assemble-vercel-output.mjs`, and the asset extraction pipeline.                                                                                                                                                                 |
+| `e2e/`                      | Playwright suite — fixtures, helpers, specs for `claude/hooks-on/`, `claude/hooks-off/`, `standalone/`, and `obsidian/`.                                                                                                                                                                                                             |
+| `eslint-rules/`             | Custom rules (`no-inline-colors`, `pixel-shadow`, `pixel-font`) enforced project-wide.                                                                                                                                                                                                                                               |
 
 The repo uses **npm workspaces** (`server`, `webview-ui` declared in the root `package.json`). A single `npm install` at the root installs dependencies for all workspaces; no nested `cd ... && npm install` is needed.
 
@@ -174,18 +174,18 @@ npm run test:server
 npm run test:webview
 ```
 
-Server tests cover `AgentStateStore` (typed mutations + events), `HookEventHandler` (routing, buffering, team gating), `SessionRouter` and `DismissalTracker`, `FileStateAdapter` (namespaced persistence), `migrateVsCodeState` (verify-before-clear), `teamUtils`, the Claude provider and its team extension, the hook installer, the HTTP server (lifecycle, auth, `/ws`, broadcast), and the hook script via a spawned-process integration test.
+Server tests cover `AgentStateStore` (typed mutations + events), `HookEventHandler` (routing, buffering, team gating), `SessionRouter` and `DismissalTracker`, `FileStateAdapter` (namespaced persistence), `migrateVsCodeState` (verify-before-clear), `teamUtils`, the Claude provider and its team extension, the hook installer, the HTTP server (lifecycle, auth, `/ws`, broadcast), the shared office composition (`startOffice`), and the hook script via a spawned-process integration test.
 
 `claude-hook.test.ts` requires the bundled hook at `dist/hooks/claude-hook.js`, so build before running it (or use `npm test` which builds first).
 
 ## End-to-End Tests
 
-The `e2e/` directory contains Playwright tests that launch a real VS Code instance with the extension loaded in development mode.
+The `e2e/` directory contains Playwright tests. Most launch a real VS Code instance with the extension loaded in development mode; the `standalone/` specs drive the CLI's server in a browser, and the `obsidian/` specs run the built plugin under a fake Obsidian host (`e2e/fixtures/obsidian-host.cjs`).
 
 ### Running e2e tests locally
 
 ```bash
-# Build the extension first (tests load the compiled output)
+# Build first (tests load the compiled output, including dist/obsidian/)
 npm run build
 
 # Runs the e2e tests
@@ -258,7 +258,7 @@ The auto-generated test inventory in `e2e/README.md` groups tests by `@area:` ta
    npm run asyncapi:validate            # AsyncAPI spec validation
    npm run asyncapi:generate            # Regen core/src/messages.ts (must produce no git diff)
    npm run e2e:inventory                # Regen e2e/README.md (must produce no git diff)
-   npm run build                        # esbuild (extension + CLI + hooks) + Vite (webview)
+   npm run build                        # esbuild (extension + CLI + hooks) + Vite (webview) + Obsidian plugin
    npm test                             # Server vitest + webview vitest
    npm run e2e                          # Full Playwright suite; inventory lives in e2e/README.md
    ```
