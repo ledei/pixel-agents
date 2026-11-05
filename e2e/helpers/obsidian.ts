@@ -25,6 +25,9 @@ export interface ObsidianSession {
   registryEntries: () => string[];
   /** Close the open (last) view; resolves once the host acknowledged it. */
   closeView: () => Promise<void>;
+  /** Obsidian's window reload: unload without awaiting, then load the plugin
+   *  again in the same process. Resolves with the new view's URL. */
+  reloadPlugin: () => Promise<string>;
   /** Unload the plugin and wait for the host process to exit. */
   unloadPlugin: () => Promise<void>;
   getHostLogs: () => string;
@@ -133,6 +136,15 @@ export async function launchObsidian(page: Page): Promise<ObsidianSession> {
       closeView: async () => {
         host.stdin.write('close-view\n');
         await waitForLine(() => stdout, /(OBSIDIAN_VIEW_CLOSED)/, 'the view closing');
+      },
+      reloadPlugin: async () => {
+        const seen = stdout.length;
+        host.stdin.write('reload\n');
+        return waitForLine(
+          () => stdout.slice(seen),
+          /OBSIDIAN_VIEW_URL (\S+)\s/,
+          'the reloaded view URL',
+        );
       },
       unloadPlugin: () => stopHost(host),
       getHostLogs,

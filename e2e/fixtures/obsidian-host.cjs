@@ -79,8 +79,12 @@ async function waitFor(find, what) {
   throw new Error(`Timed out waiting for ${what}`);
 }
 
-async function main() {
-  const Pixel = require(path.join(vault, pluginRel, 'main.js')).default;
+/** Load the plugin as a fresh module, run onload and open one office view. */
+async function openPlugin() {
+  const mainPath = path.join(vault, pluginRel, 'main.js');
+  // A fresh module per load, like a fresh renderer after Obsidian's reload.
+  delete require.cache[mainPath];
+  const Pixel = require(mainPath).default;
   const manifest = JSON.parse(
     fs.readFileSync(path.join(vault, pluginRel, 'manifest.json'), 'utf8'),
   );
@@ -98,19 +102,31 @@ async function main() {
     return view.created.find((c) => c.tag === 'iframe');
   }, 'the office iframe');
   console.log(`OBSIDIAN_VIEW_URL ${iframe.attr.src}`);
+  return { plugin, view };
+}
+
+async function main() {
+  let current = await openPlugin();
 
   let unloading = false;
   async function unload() {
     if (unloading) return;
     unloading = true;
-    await plugin.onunload();
+    await current.plugin.onunload();
     process.exit(0);
   }
   process.on('SIGTERM', () => void unload());
   const lines = readline.createInterface({ input: process.stdin });
   lines.on('line', (line) => {
     if (line.trim() === 'close-view') {
-      void view.onClose().then(() => console.log('OBSIDIAN_VIEW_CLOSED'));
+      void current.view.onClose().then(() => console.log('OBSIDIAN_VIEW_CLOSED'));
+    } else if (line.trim() === 'reload') {
+      // Obsidian's window reload: onunload is not awaited, and the next plugin
+      // instance loads in the same process (same PID) right away.
+      void current.plugin.onunload();
+      void openPlugin().then((next) => {
+        current = next;
+      });
     } else if (line.trim() === 'unload') {
       void unload();
     }
