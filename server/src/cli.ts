@@ -269,10 +269,12 @@ async function main(): Promise<void> {
     // ── Graceful shutdown ──
     let shuttingDown = false;
     async function shutdown(): Promise<void> {
-      if (shuttingDown) return;
+      // A second Ctrl+C means "don't wait": quit without finishing the close.
+      if (shuttingDown) process.exit(1);
       shuttingDown = true;
       console.log('\nShutting down...');
-      await office.stop();
+      // A request stuck mid-flight must not hold the exit: cap the close.
+      await Promise.race([office.stop(), new Promise((r) => setTimeout(r, 3_000).unref())]);
       process.exit(0);
     }
 
