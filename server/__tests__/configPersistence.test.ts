@@ -204,6 +204,7 @@ describe('configPersistence: areas', () => {
       const cfg = readConfig();
       cfg.vscode.hooksInfoShown = true;
       cfg.standalone.hooksInfoShown = true;
+      cfg.obsidian.hooksInfoShown = true;
       writeConfig(cfg);
 
       resetHooksConfig();
@@ -215,6 +216,58 @@ describe('configPersistence: areas', () => {
       const reset = readConfig();
       expect(reset.vscode.hooksInfoShown).toBe(false);
       expect(reset.standalone.hooksInfoShown).toBe(false);
+      expect(reset.obsidian.hooksInfoShown).toBe(false);
+    });
+  });
+
+  // ── obsidian namespace ───────────────────────────────────────
+
+  describe('obsidian namespace', () => {
+    it('defaults watchAllSessions to true for obsidian only, with no config file', () => {
+      const cfg = readConfig();
+      expect(cfg.obsidian.watchAllSessions).toBe(true);
+      expect(cfg.vscode.watchAllSessions).toBe(false);
+      expect(cfg.standalone.watchAllSessions).toBe(false);
+    });
+
+    it('reads a config.json without an obsidian section with obsidian defaults', () => {
+      const configDir = path.join(tempHome, '.pixel-agents');
+      fs.mkdirSync(configDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(configDir, 'config.json'),
+        JSON.stringify({ vscode: { watchAllSessions: true }, standalone: { soundEnabled: false } }),
+        'utf-8',
+      );
+
+      const cfg = readConfig();
+      expect(cfg.obsidian.watchAllSessions).toBe(true);
+      expect(cfg.obsidian.soundEnabled).toBe(true);
+      expect(cfg.vscode.watchAllSessions).toBe(true);
+      expect(cfg.standalone.watchAllSessions).toBe(false);
+    });
+
+    it('an explicit obsidian watchAllSessions=false wins over the default; wrong types fall back to it', () => {
+      const configDir = path.join(tempHome, '.pixel-agents');
+      fs.mkdirSync(configDir, { recursive: true });
+      const file = path.join(configDir, 'config.json');
+      fs.writeFileSync(file, JSON.stringify({ obsidian: { watchAllSessions: false } }), 'utf-8');
+      expect(readConfig().obsidian.watchAllSessions).toBe(false);
+
+      fs.writeFileSync(file, JSON.stringify({ obsidian: { watchAllSessions: 'no' } }), 'utf-8');
+      expect(readConfig().obsidian.watchAllSessions).toBe(true);
+    });
+
+    it('round-trips the obsidian section independently of the other namespaces', () => {
+      const cfg = readConfig();
+      cfg.obsidian.showAreas = true;
+      cfg.obsidian.areaMappings = { notes: ['Vault'] };
+      writeConfig(cfg);
+
+      const reloaded = readConfig();
+      expect(reloaded.obsidian.showAreas).toBe(true);
+      expect(reloaded.obsidian.areaMappings).toEqual({ notes: ['Vault'] });
+      expect(reloaded.vscode.showAreas).toBe(false);
+      expect(reloaded.standalone.areaMappings).toEqual({});
     });
   });
 
