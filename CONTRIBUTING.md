@@ -37,6 +37,10 @@ If you are using Remote SSH, WSL, or a dev container, `code --install-extension`
 
 After installing the `.vsix`, run **Developer: Reload Window** in VS Code to load the updated extension.
 
+### Build the Obsidian plugin locally
+
+`npm run build` also assembles the plugin folder in `dist/obsidian/`. After changing `adapters/obsidian/`, `npm run build:obsidian` rebuilds just that bundle and the folder (it needs the `dist/assets`, `dist/hooks` and `dist/webview` from a full build). Copy `dist/obsidian/` to `<vault>/.obsidian/plugins/pixel-agents/` and reload Obsidian.
+
 ### Verify the npm package locally
 
 The npm artifact has its own gate because source-level tests cannot detect a missing tarball file or a package-relative path bug:
@@ -97,13 +101,14 @@ Vite will print a local URL (typically `http://localhost:5173`) where the mocked
 
 ### Project Structure
 
-Pixel Agents uses a layered codebase. `core/` depends on nothing; `server/` and `webview-ui/` depend only on `core/`; `adapters/vscode/` depends on `core/` and `server/`.
+Pixel Agents uses a layered codebase. `core/` depends on nothing; `server/` and `webview-ui/` depend only on `core/`; `adapters/vscode/` and `adapters/obsidian/` depend on `core/` and `server/`, and never on each other.
 
 | Directory                   | Description                                                                                                                                                                                                                                           |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core/`                     | Protocol + interface definitions (AsyncAPI 3.0 contract, HookProvider, MessageTransport, StateAdapter). Zero runtime side effects.                                                                                                                    |
 | `server/`                   | Lifecycle runtime: `AgentRuntime`, `AgentStateStore`, `SessionRouter`, `DismissalTracker`, Fastify HTTP/WS server, file watching, transcript parsing, hook installer, providers, Vitest test suite. Also ships the `npx pixel-agents` standalone CLI. |
 | `adapters/vscode/`          | VS Code surface — `extension.ts`, `WebviewViewProvider`, terminal lifecycle, one-time state migration. Composes `core/` and `server/`.                                                                                                                |
+| `adapters/obsidian/`        | Obsidian plugin — `main.ts`, an `ItemView` that embeds the office, and a lifecycle that starts it with the first view and stops it with the last. Composes `core/` and `server/` via `startOffice`.                                                   |
 | `webview-ui/`               | React 19 + Canvas UI. Transport abstraction (`PostMessageTransport` + `WebSocketTransport`). Depends only on `core/`.                                                                                                                                 |
 | `webview-ui/public/assets/` | Bundled sprites, furniture catalog, default layout, fonts.                                                                                                                                                                                            |
 | `scripts/`                  | Build/CI tooling: `generate-messages.ts` (AsyncAPI → TS), `run-e2e.mjs`, `build-allure-report.mjs`, `assemble-vercel-output.mjs`, and the asset extraction pipeline.                                                                                  |

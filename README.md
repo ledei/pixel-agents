@@ -25,10 +25,11 @@
 
 Pixel Agents turns the AI coding agents running in your terminals into animated pixel-art characters working in a tiny office. They walk to their desks, sit down, type when they're editing files, read when they're searching, and flag you visually when they're stuck waiting for input.
 
-It ships in two forms from the same codebase:
+It ships in three forms from the same codebase:
 
 - **VS Code extension** — [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pablodelucca.pixel-agents) and [Open VSX](https://open-vsx.org/extension/pablodelucca/pixel-agents). Agents launch into VS Code terminals; characters render in the panel area.
 - **Standalone CLI** — `npx pixel-agents` starts a local server and serves the same office as a browser app, useful for tmux, remote, and non-VS Code workflows.
+- **Obsidian plugin** — opens the office as a tab in Obsidian desktop, for watching agents while you work in a vault.
 
 The architecture is fully agent-agnostic and editor-agnostic: a typed `HookProvider` interface defines the integration boundary so adding a new AI tool is a single subdirectory of code. Claude Code is the reference implementation today; Codex, Gemini, Cursor, and others are on the roadmap.
 
@@ -68,6 +69,7 @@ Most of this is still ahead. See [Issues](https://github.com/pixel-agents-hq/pix
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and configured
 - **VS Code extension:** VS Code 1.105.0 or later
 - **Standalone CLI:** Node.js 20 or later
+- **Obsidian plugin:** Obsidian desktop (1.7.2 or later), and Node.js 20 or later to build it
 - Windows, Linux, or macOS
 
 ## Getting Started
@@ -117,6 +119,20 @@ Pass `--no-terminal` to disable the embedded terminal — watch agents without l
 
 Copying from the embedded terminal is verbatim: Cmd+C (Mac), Ctrl+C or Ctrl+Shift+C with a selection (Windows, Linux), the browser's Copy, and the **Copy** button on a phone copy exactly what is on screen. Claude Code wraps long prose into lines indented two spaces; to copy such a passage as flowing text instead, select it and press **Alt+C** (**Option+C** on a Mac), or tap **Copy as text** on a phone. On a phone opened over plain `http://` (a LAN address), the paste key asks for the text in a prompt, since the page cannot read the clipboard there.
 
+### Obsidian plugin
+
+Build it from source (the plugin is not in Obsidian's community store):
+
+```bash
+npm install && npm run build
+```
+
+Copy `dist/obsidian/` to `<vault>/.obsidian/plugins/pixel-agents/`, then enable **Pixel Agents** in **Settings → Community plugins**. Click the bot icon in the ribbon or run the **Open office** command. The office starts with the view and stops when you close it.
+
+Obsidian has no terminal to launch agents in, so **+ Agent** is unavailable: start Claude Code in your own terminal and it appears. **Watch All Sessions** is on by default, since the vault is the only Directory the office knows.
+
+The first time you use the office it asks in the Intro whether to install the hooks (instant detection). Add or remove them later in the office's **Settings → Instant Detection (Hooks)**, and remove them there before deleting the plugin, since they live in your agent tool's settings file.
+
 ### Running the extension and standalone together
 
 The extension and standalone CLI can run at the same time. Each server registers under `~/.pixel-agents/servers/`; the hook script sends events to all active registrations. VS Code and standalone keep separate agents, seats, and settings while using the shared office layout.
@@ -158,6 +174,7 @@ Pixel Agents does not modify Claude Code. Its hook configuration and persistent 
 - **`core/`** — provider, adapter, transport, schema, and AsyncAPI message contracts with no runtime side effects.
 - **`server/`** — shared Fastify server, agent runtime, persistence, Claude provider, transcript scanning, and standalone CLI.
 - **`adapters/vscode/`** — the VS Code adapter: terminal, persistence, and webview bridge.
+- **`adapters/obsidian/`** — the Obsidian adapter: a plugin view that runs the office in-process.
 - **`webview-ui/`** — React 19, Vite, Canvas 2D, and adapter-specific transports for VS Code and browser WebSocket clients.
 
 The extension and CLI are bundled with esbuild; the webview is built with Vite. Unit tests use Vitest and Node's test runner, and end-to-end coverage uses Playwright against VS Code and standalone.

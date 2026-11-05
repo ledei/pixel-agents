@@ -9,7 +9,7 @@ The machine Pixel Agents runs on — a laptop, a phone, a VPS, a Raspberry Pi. T
 _Avoid_: platform, environment, server (that's the runtime process)
 
 **Adapter**:
-The integration that connects one editor or application — VS Code, standalone, a macOS app, and the like — to Pixel Agents. An adapter composes the runtime and the office UI, and binds them to that environment's terminals, storage, and conventions. One adapter per editor or application; VS Code and standalone are the two today.
+The integration that connects one editor or application — VS Code, standalone, a macOS app, and the like — to Pixel Agents. An adapter composes the runtime and the office UI, and binds them to that environment's terminals, storage, and conventions. One adapter per editor or application; VS Code, standalone and Obsidian are the three today.
 _Avoid_: host (that's the machine it runs on), surface, flavor, platform, edition
 
 **Standalone**:
