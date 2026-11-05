@@ -7,6 +7,7 @@ import type { HookProvider } from '../../core/src/provider.js';
 import { AgentRuntime } from '../src/agentRuntime.js';
 import { AgentStateStore } from '../src/agentStateStore.js';
 import { JSONL_POLL_INTERVAL_MS } from '../src/constants.js';
+import type { HostDirectoryEntry } from '../src/directories.js';
 import { claudeProvider } from '../src/providers/hook/claude/claude.js';
 import type { IPty, PtyModule, PtySpawnOptions } from '../src/terminal/ptyModule.js';
 import { PtySessionManager } from '../src/terminal/ptySessionManager.js';
@@ -78,9 +79,14 @@ describe('launchStandaloneAgent', () => {
     return { ...claudeProvider, getSessionDirs: () => [projectDir], ...overrides };
   }
 
+  /** The host Directory a launch without a directoryPath falls back to. */
+  function host(): HostDirectoryEntry {
+    return { name: 'workspace', path: tempDir };
+  }
+
   function launch(harness: PtyHarness, options = {}): number | null {
     return launchStandaloneAgent(
-      { store, runtime, ptyManager: harness.manager, provider: provider() },
+      { store, runtime, ptyManager: harness.manager, provider: provider(), hostDirectory: host() },
       options,
     );
   }
@@ -153,7 +159,13 @@ describe('launchStandaloneAgent', () => {
   it('returns null without burning an agent id when the terminal is unavailable', () => {
     const manager = PtySessionManager.disabled('no terminal in this test');
 
-    const id = launchStandaloneAgent({ store, runtime, ptyManager: manager, provider: provider() });
+    const id = launchStandaloneAgent({
+      store,
+      runtime,
+      ptyManager: manager,
+      provider: provider(),
+      hostDirectory: host(),
+    });
 
     expect(id).toBeNull();
     expect(store.size).toBe(0);
@@ -170,6 +182,7 @@ describe('launchStandaloneAgent', () => {
         runtime,
         ptyManager: harness.manager,
         provider: provider({ buildLaunchCommand: undefined }),
+        hostDirectory: host(),
       },
       {},
     );
@@ -188,6 +201,7 @@ describe('launchStandaloneAgent', () => {
         runtime,
         ptyManager: harness.manager,
         provider: provider({ getSessionDirs: () => [] }),
+        hostDirectory: host(),
       },
       {},
     );
@@ -205,7 +219,13 @@ describe('launchStandaloneAgent', () => {
     };
     const manager = new PtySessionManager(() => ({ module, moduleId: 'fake-pty', reason: null }));
 
-    const id = launchStandaloneAgent({ store, runtime, ptyManager: manager, provider: provider() });
+    const id = launchStandaloneAgent({
+      store,
+      runtime,
+      ptyManager: manager,
+      provider: provider(),
+      hostDirectory: host(),
+    });
 
     expect(id).toBeNull();
     expect(store.size).toBe(0);

@@ -17,6 +17,7 @@ import {
   SERVER_REGISTRY_PROTOCOL_VERSION,
   SERVERS_DIR,
 } from './constants.js';
+import type { HostDirectoryEntry } from './directories.js';
 import { createHttpServer } from './httpServer.js';
 import type { ServerConfig, StandaloneAccess } from './serverConfig.js';
 import { isServerConfig, isServerTarget, sameStandaloneAccess } from './serverConfig.js';
@@ -25,6 +26,14 @@ import type { PtySessionManager } from './terminal/ptySessionManager.js';
 import { normalizeHostname } from './wsAuth.js';
 
 export type { ServerConfig } from './serverConfig.js';
+
+/**
+ * Ports this process is serving right now. A registry entry carrying our own
+ * pid is live only if its port is in here: an Obsidian window reload keeps the
+ * renderer pid but drops every server, so a pid check alone would adopt a dead
+ * port. Module state resets with the JS context, exactly when those servers go.
+ */
+const portsServedHere = new Set<number>();
 
 /** Callback invoked when a hook event is received from a provider's hook script. */
 type HookEventCallback = (providerId: string, event: Record<string, unknown>) => void;
@@ -79,6 +88,8 @@ export class PixelAgentsServer {
      *  the old one. Refused while another standalone server is running: it
      *  would keep honouring the old token until it restarts. */
     rotateToken?: boolean;
+    /** The Directory this host contributes (see ClientMessageContext.hostDirectory). */
+    hostDirectory?: HostDirectoryEntry | null;
   }): Promise<ServerConfig> {
     const embedded = options?.embedded ?? true;
     const wantsSpa = !embedded;
@@ -144,6 +155,7 @@ export class PixelAgentsServer {
       onReloadAssets: options?.onReloadAssets,
       ptyManager: options?.ptyManager,
       allowedHosts: standalone?.allowedHosts,
+      hostDirectory: options?.hostDirectory,
     });
 
     this.app = app;
@@ -162,6 +174,7 @@ export class PixelAgentsServer {
         : {}),
     };
     this.ownsServer = true;
+    portsServedHere.add(port);
     // Dual-write: legacy single-target pointer (old hook scripts) + registry
     // entry (new hook scripts fan out to every entry here).
     this.writeServerJson(this.config);
@@ -171,18 +184,25 @@ export class PixelAgentsServer {
     return this.config;
   }
 
-  /** Stop the server and clean up its discovery records (only if we own them). */
-  stop(): void {
-    if (this.app) {
-      this.app.close();
-      this.app = null;
-    }
-    if (this.ownsServer) {
+  /** Stop the server and clean up its discovery records (only if we own them).
+   *  The records go synchronously; the returned promise settles once the port
+   *  is closed. */
+  async stop(): Promise<void> {
+    const closing = this.app?.close();
+    this.app = null;
+    if (this.ownsServer && this.config) {
+      portsServedHere.delete(this.config.port);
       this.deleteServerJson();
       this.deleteRegistryEntry();
     }
     this.config = null;
     this.ownsServer = false;
+    await closing;
+  }
+
+  /** Whether this instance started the server it is using (false = reused). */
+  isOwner(): boolean {
+    return this.ownsServer;
   }
 
   /** Returns the current server config, or null if not started. */
@@ -252,8 +272,9 @@ export class PixelAgentsServer {
 
   /**
    * Read every registry entry, pruning (deleting) any whose owning PID is no
-   * longer alive -- so a crashed server's stale file never blocks discovery
-   * or gets fanned out to by the hook script. Malformed/mid-write files are
+   * longer alive, or that names this process but a port it no longer serves --
+   * so a crashed server's stale file never blocks discovery or gets fanned out
+   * to by the hook script. Malformed/mid-write files are
    * treated the same as dead entries and removed. Returns only live entries.
    */
   private readAndPruneRegistry(): ServerConfig[] {
@@ -274,7 +295,9 @@ export class PixelAgentsServer {
           fs.unlinkSync(filePath);
           continue;
         }
-        if (isProcessRunning(entry.pid)) {
+        const alive =
+          entry.pid === process.pid ? portsServedHere.has(entry.port) : isProcessRunning(entry.pid);
+        if (alive) {
           live.push(entry);
         } else {
           fs.unlinkSync(filePath);

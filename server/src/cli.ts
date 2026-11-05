@@ -10,30 +10,14 @@
 
 import * as path from 'path';
 
-import { AgentRuntime } from './agentRuntime.js';
-import { AgentStateStore } from './agentStateStore.js';
-import {
-  buildAssetCache,
-  loadAllCharacters,
-  loadAllFurniture,
-  loadAllPets,
-} from './assetReload.js';
-import type { AssetCache, ReloadAssetsSideEffect } from './clientMessageHandler.js';
-import {
-  getHooksConsent,
-  getHooksEnabled,
-  grantHooksConsent,
-  readConfig,
-} from './configPersistence.js';
 import {
   MAX_PORT,
   MIN_PORT,
   TERMINAL_DISABLED_BY_FLAG_REASON,
   WILDCARD_HOSTNAMES,
 } from './constants.js';
-import { FileStateAdapter } from './fileStateAdapter.js';
-import { claudeProvider, copyHookScript, hookProviderById } from './providers/index.js';
-import { PixelAgentsServer } from './server.js';
+import { hostDirectory } from './hostDirectory.js';
+import { startOffice } from './office.js';
 import { PtySessionManager } from './terminal/ptySessionManager.js';
 import { isLoopbackHost, normalizeHostname } from './wsAuth.js';
 
@@ -122,29 +106,6 @@ Options:
   return args;
 }
 
-// ── Hooks consent ─────────────────────────────────────────────
-// First-run consent is asked IN THE APP, not here: the server sends a
-// hooksConsentRequest to privileged (tokened) connections during the
-// webviewReady handshake (clientMessageHandler.ts), and the browser renders
-// the dialog — the same UX the VS Code webview shows. The CLI itself never
-// prompts; a headless run just starts without hooks until consent is granted
-// through the UI. The one exception that needs no dialog is the silent-grant
-// migration below (our hooks already installed by a pre-consent version).
-
-/**
- * Copy the bundled hook script into ~/.pixel-agents/hooks/, reporting failure.
- *
- * Callers run this BEFORE installing the settings.json entries and abort when
- * it returns false: an entry whose command points at a missing script makes
- * Claude Code spawn a dead `node` process for every event, which is strictly
- * worse than no hooks at all.
- */
-function copyHookScriptOrReport(packageRoot: string, context = ''): boolean {
-  if (copyHookScript(packageRoot)) return true;
-  console.error(`[Pixel Agents] Hooks NOT installed${context}: hook script missing.`);
-  return false;
-}
-
 // ── Terminal status reporting ─────────────────────────────────
 
 /**
@@ -206,32 +167,6 @@ async function main(): Promise<void> {
 
   // dist/ contains both the CLI bundle and the assets/ + webview/ directories
   const distRoot = __dirname;
-  const packageRoot = path.dirname(distRoot);
-  const staticDir = path.join(distRoot, 'webview');
-
-  // ── Load assets on startup (same pipeline as VS Code extension) ──
-  // External asset directories are merged at startup too, so directories added
-  // in a previous session survive a restart. buildAssetCache is the shared
-  // loader used by both the standalone server and the VS Code adapter.
-  console.log('[Pixel Agents] Loading assets...');
-  const assetCache: AssetCache = await buildAssetCache(
-    distRoot,
-    readConfig().externalAssetDirectories,
-  );
-  const charCount = assetCache.characters?.characters.length ?? 0;
-  const petCount = assetCache.pets?.pets.length ?? 0;
-  const furnitureCount = assetCache.furniture?.catalog.length ?? 0;
-  console.log(
-    `[Pixel Agents] Assets loaded: ${charCount} characters, ${petCount} pets, ${furnitureCount} furniture items`,
-  );
-
-  // ── Store + adapter (shared settings + standalone-scoped agents/seats) ──
-  const store = new AgentStateStore();
-  const adapter = new FileStateAdapter({ namespace: 'standalone' });
-  store.setAdapter(adapter);
-
-  // ── Create server ──
-  const server = new PixelAgentsServer();
 
   // Terminals for agents this server launches. Construction is cheap -- the
   // native module is resolved (and probed) lazily on first use, so a user who
@@ -243,106 +178,21 @@ async function main(): Promise<void> {
     : PtySessionManager.disabled(TERMINAL_DISABLED_BY_FLAG_REASON);
 
   try {
-    // Create runtime first (before server.start, so we can pass it in)
-    const runtime = new AgentRuntime(store, claudeProvider);
-
-    // Wire hook events: HTTP POST -> runtime -> hookEventHandler -> agents
-    server.onHookEvent((providerId, event) => {
-      runtime.handleHookEvent(providerId, event);
-    });
-
-    // onSetHooksEnabled side effect: install/uninstall the named provider's
-    // hooks when the user toggles in the UI (or answers the consent ask).
-    // Captures config from the outer scope after server.start().
-    let currentConfig: { port: number; token: string } | null = null;
-    const onSetHooksEnabled = async (providerId: string, enabled: boolean): Promise<void> => {
-      if (!currentConfig) return;
-      const provider = hookProviderById(providerId);
-      if (!provider) return; // unknown id: nothing to install into
-      if (enabled) {
-        // An explicit toggle in the UI IS the consent to modify the
-        // provider's settings file. The bundled claude-hook.js script belongs
-        // to the Claude provider alone; another provider's install must
-        // neither copy it nor be blocked by it.
-        grantHooksConsent(provider.id);
-        if (
-          provider.id === claudeProvider.id &&
-          !copyHookScriptOrReport(packageRoot, ' (user toggle)')
-        ) {
-          return;
-        }
-        try {
-          await provider.installHooks(
-            `http://127.0.0.1:${currentConfig.port}`,
-            currentConfig.token,
-          );
-        } catch (err) {
-          console.error(`[Pixel Agents] ${err instanceof Error ? err.message : String(err)}`);
-          return;
-        }
-        console.log('[Pixel Agents] Hooks installed (user toggle)');
-      } else {
-        try {
-          await provider.uninstallHooks();
-          console.log('[Pixel Agents] Hooks uninstalled (user toggle)');
-        } catch (err) {
-          console.error(`[Pixel Agents] ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    };
-
-    // onReloadAssets side effect: re-run the shared loaders (bundled + external
-    // dirs) after an external-asset-directory change, then re-broadcast the
-    // updated sprites to the requesting client. Mutates the assetCache object in
-    // place so already-open sockets (which captured the same reference) and
-    // future webviewReady handshakes both observe the new assets. Only
-    // characters/pets/furniture can come from external dirs, so only those three
-    // are reloaded and re-sent (mirrors the VS Code reload path).
-    const onReloadAssets: ReloadAssetsSideEffect = async (send): Promise<void> => {
-      const externalDirs = readConfig().externalAssetDirectories;
-      const [characters, pets, furniture] = await Promise.all([
-        loadAllCharacters(distRoot, externalDirs),
-        loadAllPets(distRoot, externalDirs),
-        loadAllFurniture(distRoot, externalDirs),
-      ]);
-      assetCache.characters = characters;
-      assetCache.pets = pets;
-      assetCache.furniture = furniture;
-      if (characters) {
-        send({ type: 'characterSpritesLoaded', characters: characters.characters });
-      }
-      if (pets) {
-        send({
-          type: 'petSpritesLoaded',
-          pets: pets.pets,
-          petNames: pets.manifests.map((m) => m.name),
-        });
-      }
-      if (furniture) {
-        send({
-          type: 'furnitureAssetsLoaded',
-          catalog: furniture.catalog,
-          sprites: Object.fromEntries(furniture.sprites),
-        });
-      }
-      console.log('[Pixel Agents] Assets reloaded (external directory change)');
-    };
-
-    const config = await server.start({
-      store,
-      runtime,
-      embedded: false,
+    // Standalone scans, and contributes as its host Directory, the directory
+    // it was started from.
+    const office = await startOffice({
+      distRoot,
+      packageRoot: path.dirname(distRoot),
+      staticDir: path.join(distRoot, 'webview'),
+      namespace: 'standalone',
       host: args.host,
       port: args.port,
-      staticDir,
-      assetCache,
-      onSetHooksEnabled,
-      onReloadAssets,
       ptyManager,
       allowedHosts: args.allowedHosts,
       rotateToken: args.rotateToken,
+      scanDir: process.cwd(),
+      hostDirectory: hostDirectory(),
     });
-    currentConfig = { port: config.port, token: config.token };
     if (args.rotateToken) {
       console.log(
         '[Pixel Agents] Server token rotated: URLs carrying the old token no longer grant access. Open the new URL below on each device.',
@@ -351,71 +201,7 @@ async function main(): Promise<void> {
 
     reportTerminalStatus(ptyManager, args.host, args.terminal);
 
-    // Sync runtime refs with persisted settings BEFORE first scan tick. The
-    // runtime's single hooksEnabled ref follows the Claude provider until the
-    // scanners grow per-provider awareness alongside the Settings UI.
-    runtime.hooksEnabled.current = getHooksEnabled(claudeProvider.id);
-    runtime.watchAllSessions.current = adapter.getSetting('pixel-agents.watchAllSessions', false);
-
-    // Install hooks on startup if the persisted setting says so — gated on the
-    // one-time consent to modify ~/.claude/settings.json.
-    if (runtime.hooksEnabled.current) {
-      let consent = getHooksConsent(claudeProvider.id) === 'granted';
-      if (!consent && (await claudeProvider.areHooksInstalled())) {
-        // Our hooks are already installed and already firing — a pre-consent
-        // version put them there. Grant and continue with NO prompt: the
-        // install below is the 14 -> 12 migration, and it only ever REDUCES
-        // scope (it drops UserPromptSubmit and TaskCreated, the two events that
-        // forwarded prompt text and were consumed by nothing). Asking would buy
-        // this user no protection they do not already have, so they are not
-        // asked. A fresh install still is, in full — in the browser UI, when a
-        // tokened client connects (clientMessageHandler's webviewReady).
-        grantHooksConsent(claudeProvider.id);
-        consent = true;
-      }
-      if (!consent) {
-        console.log(
-          '[Pixel Agents] Hooks not installed: modifying ~/.claude/settings.json needs one-time approval — open the URL below to review and approve it.',
-        );
-      } else if (copyHookScriptOrReport(packageRoot)) {
-        try {
-          await claudeProvider.installHooks(`http://127.0.0.1:${config.port}`, config.token);
-          console.log('[Pixel Agents] Hooks installed');
-        } catch (err) {
-          console.error(`[Pixel Agents] ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    } else {
-      // Without this line, a persisted hooks-off makes startup skip the entire
-      // consent/install flow with zero output — indistinguishable from a bug.
-      console.log(
-        '[Pixel Agents] Hooks disabled — enable "Instant Detection (Hooks)" in the UI settings to install them.',
-      );
-    }
-
-    // Start scanning for external sessions (Claude running in user's terminal)
-    const cwd = process.cwd();
-    const dirs = claudeProvider.getSessionDirs?.(cwd);
-    if (dirs && dirs[0]) {
-      const projectDir = dirs[0];
-      console.log(`[Pixel Agents] Scanning project dir: ${projectDir}`);
-      runtime.startProjectScan(projectDir);
-      runtime.startExternalScanning(projectDir);
-      runtime.startStaleCheck();
-    }
-
-    // The URL the operator opens has to be REACHABLE (a wildcard bind address
-    // is a bind target, not an address you can browse to — `--host 0.0.0.0`
-    // used to print a dead `http://0.0.0.0:PORT`) and has to carry the token,
-    // which is what makes the session it loads privileged enough to approve a
-    // hook install (see standaloneTokenValid in httpServer.ts). Under `--host
-    // 0.0.0.0` the office stays readable from the LAN at this machine's own
-    // address; only the consent-bearing toggle needs the token.
-    const displayHost =
-      args.host === '0.0.0.0' || args.host === '::' || args.host === '' ? '127.0.0.1' : args.host;
-    console.log(
-      `\n  Pixel Agents server running at http://${displayHost}:${config.port}/?token=${config.token}\n`,
-    );
+    console.log(`\n  Pixel Agents server running at ${office.url}\n`);
 
     // ── Graceful shutdown ──
     let shuttingDown = false;
@@ -423,12 +209,7 @@ async function main(): Promise<void> {
       if (shuttingDown) return;
       shuttingDown = true;
       console.log('\nShutting down...');
-      // Kill child terminals before the runtime tears their agents down, and
-      // wait for them: exiting now would cancel the SIGKILL escalation and
-      // leave a child that ignores SIGHUP orphaned on a dead server.
-      await ptyManager.disposeAll();
-      runtime.dispose();
-      server.stop();
+      await office.stop();
       process.exit(0);
     }
 

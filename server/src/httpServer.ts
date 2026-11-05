@@ -18,6 +18,7 @@ import {
   WS_CLOSE_FORBIDDEN_ORIGIN,
   WS_CLOSE_UNAUTHORIZED,
 } from './constants.js';
+import type { HostDirectoryEntry } from './directories.js';
 import type { PtySessionManager } from './terminal/ptySessionManager.js';
 import { registerTerminalRoutes } from './terminal/terminalRoutes.js';
 import type { AgentState } from './types.js';
@@ -60,6 +61,8 @@ export interface HttpServerOptions {
    *  privileged standalone handshake may arrive under -- e.g. a reverse proxy's
    *  public name. See wsAuth.privilegedHostnames. */
   allowedHosts?: readonly string[];
+  /** The Directory this host contributes (see ClientMessageContext.hostDirectory). */
+  hostDirectory?: HostDirectoryEntry | null;
 }
 
 /** Result of createHttpServer(). */
@@ -262,6 +265,7 @@ function registerWebSocketRoute(
           onReloadAssets: options.onReloadAssets,
           privileged,
           ptyManager: options.ptyManager,
+          hostDirectory: options.hostDirectory,
         });
       } catch {
         // Malformed JSON, ignore
