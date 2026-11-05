@@ -1,0 +1,9 @@
+{
+  "id": "pixel-agents",
+  "name": "Pixel Agents",
+  "minAppVersion": "1.7.2",
+  "description": "Pixel art office where your Claude Code agents come to life as animated characters.",
+  "author": "Pixel Agents",
+  "authorUrl": "https://github.com/pixel-agents-hq/pixel-agents",
+  "isDesktopOnly": true
+}

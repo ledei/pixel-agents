@@ -109,6 +109,24 @@ describe.skipIf(!fs.existsSync(path.join(DIST_ROOT, 'webview')))('startOffice', 
     expect(registryEntries()).toEqual([`${process.pid}-${second.config.port}.json`]);
   });
 
+  // The Obsidian plugin stops its office when the last view closes and starts
+  // a fresh one on the next open, in the same process: module-level runtime
+  // state left by the first office must not break the second.
+  it('a second office in the same process serves, adopts sessions and stops cleanly', async () => {
+    const first = await start();
+    expect(await adoptsSessionOutsideScanRoot(first)).toBe(true);
+    await first.stop();
+
+    const second = await start();
+
+    expect(second.ownsServer).toBe(true);
+    expect((await fetch(new URL('/api/health', second.url))).ok).toBe(true);
+    expect(await adoptsSessionOutsideScanRoot(second)).toBe(true);
+    await second.stop();
+    expect(registryEntries()).toEqual([]);
+    await expect(fetch(new URL('/api/health', second.url))).rejects.toThrow();
+  });
+
   describe('host Directory', () => {
     // Host Directories are listed only while the namespace's Show setting is on.
     beforeEach(() => seedConfig({ obsidian: { showHostDirectories: true } }));
@@ -156,47 +174,6 @@ describe.skipIf(!fs.existsSync(path.join(DIST_ROOT, 'webview')))('startOffice', 
       expect(refused.mappings).toEqual({ vault: ['Notes'] });
     });
 
-    /** Report a session from a project outside the scan root over the hook
-     *  endpoint, before any client's webviewReady could re-sync the runtime,
-     *  and say whether the office adopted it. */
-    async function adoptsSessionOutsideScanRoot(office: Office): Promise<boolean> {
-      const sessionId = '0b1c2d3e-0000-4000-8000-000000000001';
-      const projectDir = path.join(tempHome, '.claude', 'projects', '-somewhere-else');
-      const transcriptPath = path.join(projectDir, `${sessionId}.jsonl`);
-      fs.mkdirSync(projectDir, { recursive: true });
-      fs.writeFileSync(transcriptPath, '');
-
-      const ws = new WebSocket(`ws://127.0.0.1:${office.config.port}/ws`);
-      const created: unknown[] = [];
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString()) as { type: string };
-        if (msg.type === 'agentCreated') created.push(msg);
-      });
-      await new Promise((resolve) => ws.once('open', resolve));
-      try {
-        for (const hook_event_name of ['SessionStart', 'Stop']) {
-          await fetch(`http://127.0.0.1:${office.config.port}/api/hooks/claude`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${office.config.token}`,
-            },
-            body: JSON.stringify({
-              session_id: sessionId,
-              hook_event_name,
-              transcript_path: transcriptPath,
-              cwd: '/somewhere/else',
-              source: 'startup',
-            }),
-          });
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return created.length > 0;
-      } finally {
-        ws.close();
-      }
-    }
-
     it("obsidian's watch-all default reaches the runtime: it adopts a session outside the scan root", async () => {
       const office = await start({ namespace: 'obsidian' });
 
@@ -210,6 +187,47 @@ describe.skipIf(!fs.existsSync(path.join(DIST_ROOT, 'webview')))('startOffice', 
     });
   });
 });
+
+/** Report a session from a project outside the scan root over the hook
+ *  endpoint, before any client's webviewReady could re-sync the runtime,
+ *  and say whether the office adopted it. */
+async function adoptsSessionOutsideScanRoot(office: Office): Promise<boolean> {
+  const sessionId = '0b1c2d3e-0000-4000-8000-000000000001';
+  const projectDir = path.join(tempHome, '.claude', 'projects', '-somewhere-else');
+  const transcriptPath = path.join(projectDir, `${sessionId}.jsonl`);
+  fs.mkdirSync(projectDir, { recursive: true });
+  fs.writeFileSync(transcriptPath, '');
+
+  const ws = new WebSocket(`ws://127.0.0.1:${office.config.port}/ws`);
+  const created: unknown[] = [];
+  ws.on('message', (data) => {
+    const msg = JSON.parse(data.toString()) as { type: string };
+    if (msg.type === 'agentCreated') created.push(msg);
+  });
+  await new Promise((resolve) => ws.once('open', resolve));
+  try {
+    for (const hook_event_name of ['SessionStart', 'Stop']) {
+      await fetch(`http://127.0.0.1:${office.config.port}/api/hooks/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${office.config.token}`,
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          hook_event_name,
+          transcript_path: transcriptPath,
+          cwd: '/somewhere/else',
+          source: 'startup',
+        }),
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return created.length > 0;
+  } finally {
+    ws.close();
+  }
+}
 
 function registryEntries(): string[] {
   const dir = path.join(tempHome, '.pixel-agents', 'servers');
