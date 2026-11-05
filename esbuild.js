@@ -4,6 +4,8 @@ const path = require('path');
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
+/** Build only the Obsidian plugin bundle (`npm run build:obsidian`). */
+const obsidian = process.argv.includes('--obsidian');
 
 /** Extension version read from package.json at build time, inlined via esbuild `define`. */
 const pkgVersion = JSON.parse(
@@ -83,6 +85,10 @@ const esbuildProblemMatcherPlugin = {
 };
 
 async function main() {
+  if (obsidian) {
+    await buildObsidian();
+    return;
+  }
   const ctx = await esbuild.context({
     entryPoints: ['adapters/vscode/extension.ts'],
     bundle: true,
@@ -157,6 +163,39 @@ async function buildCli() {
   if (!production) {
     console.log('[build] CLI bundled: dist/cli.mjs');
   }
+}
+
+/**
+ * Bundle the Obsidian plugin entry. Obsidian loads main.js with its own
+ * require() inside its Electron renderer (Electron 34, Node 20), so the server
+ * and Fastify are inlined: a plugin folder has no node_modules. Only what the
+ * app provides (obsidian, electron, CodeMirror) and the optional native PTY
+ * modules stay external. Run by `npm run build:obsidian`, which then
+ * assembles the plugin folder (scripts/assemble-obsidian-plugin.mjs).
+ */
+async function buildObsidian() {
+  await esbuild.build({
+    entryPoints: ['adapters/obsidian/main.ts'],
+    bundle: true,
+    format: 'cjs',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: 'node',
+    target: ['node20', 'chrome132'],
+    outfile: 'dist/obsidian/main.js',
+    external: [
+      'obsidian',
+      'electron',
+      '@codemirror/*',
+      '@lezer/*',
+      // Never loaded: Obsidian's office has no terminal (PtySessionManager.disabled).
+      '@lydell/node-pty',
+      'node-pty',
+    ],
+    define: versionDefine,
+    logLevel: 'silent',
+  });
 }
 
 main().catch((e) => {

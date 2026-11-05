@@ -128,6 +128,7 @@ jobs:
         run: |
           npm run build:extension
           npm run build:webview
+          npm run build:obsidian
         continue-on-error: true
 
       - name: Verify npm Package Artifact

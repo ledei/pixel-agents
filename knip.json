@@ -28,6 +28,7 @@
       ],
       "project": [
         "adapters/vscode/**/*.ts",
+        "adapters/obsidian/**/*.ts",
         "core/src/**/*.ts",
         "e2e/**/*.ts",
         "scripts/**/*.{ts,mjs}"
