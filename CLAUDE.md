@@ -796,7 +796,7 @@ Supporting: `wall-tile-editor.html` (wall sprite editing), `jsonl-viewer.html` (
 - **HookProvider** as the integration boundary, with optional file fallback. New CLIs are a single subdirectory under `server/src/providers/hook/<id>/`.
 - **TeamProvider** as optional extension. Claude Agent Teams is the only implementation.
 - **Per-adapter namespaced persistence** under `~/.pixel-agents/`. VS Code and standalone never clobber each other.
-- **Obsidian runs in-process, without an embedded terminal.** The PTY is a native module that does not load in Obsidian's Electron, so `PtySessionManager.disabled(reason)` is passed and "+ Agent" is unavailable with that reason; agents started in the user's own terminal are adopted.
+- **Obsidian runs in-process, without an embedded terminal.** The PTY is a native module that does not load in Obsidian's Electron, so `PtySessionManager.disabled(reason)` is passed and the New agent (+) button is unavailable with that reason; agents started in the user's own terminal are adopted.
 - **A registry entry carrying our own PID is live only while its port is served by this process.** An Electron renderer reload keeps the PID but drops every server, so a PID check alone would reuse a dead entry (`server.ts`). The plugin also stops its server on unload.
 - **Verify-before-clear migration** for legacy VS Code state.
 - **Single `WebviewViewProvider`** (panel area, not editor area).

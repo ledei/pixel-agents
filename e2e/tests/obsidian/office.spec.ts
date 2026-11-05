@@ -16,7 +16,7 @@ import { setSettings } from '../../helpers/webview';
  * e2e/README.md "Mocking model & rules").
  */
 test.describe('Obsidian / office', () => {
-  test('opening the view serves a privileged office whose + Agent says why it is unavailable @area:obsidian', async ({
+  test('opening the view serves a privileged office whose New agent button says why it is unavailable @area:obsidian', async ({
     page,
     obsidian,
   }) => {
@@ -37,7 +37,7 @@ test.describe('Obsidian / office', () => {
     await expect(page.getByText('View only', { exact: true })).toHaveCount(0);
 
     // No terminal: the launch button stays, disabled, with the adapter's reason.
-    const addAgent = page.getByRole('button', { name: '+ Agent' });
+    const addAgent = page.getByRole('button', { name: 'New agent' });
     await expect(addAgent).toBeVisible();
     await expect(addAgent).toBeDisabled();
     await expect(addAgent).toHaveAttribute('title', /Obsidian has no terminal/);

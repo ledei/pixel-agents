@@ -17,7 +17,7 @@ export const SETTINGS_NAMESPACE: ConfigNamespace = 'obsidian';
 /** Loopback only: the office is for this machine's Obsidian, not the LAN. */
 export const OFFICE_HOST = '127.0.0.1';
 
-/** Why "+ Agent" is unavailable: the PTY module is native and does not load in
+/** Why the New agent (+) button is unavailable: the PTY module is native and does not load in
  *  Obsidian's Electron, and Obsidian has no terminal of its own. */
 export const TERMINAL_UNAVAILABLE_REASON =
   'Obsidian has no terminal to launch agents in. Agents you start in your own terminal still appear in the office.';

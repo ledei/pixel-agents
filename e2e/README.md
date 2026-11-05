@@ -32,7 +32,7 @@ The `npx pixel-agents` CLI path: hook-driven lifecycle propagates from the local
 
 ### Obsidian adapter (`@area:obsidian`)
 
-The built plugin (`dist/obsidian`, from `npm run build:obsidian`) copied into a temp vault's `.obsidian/plugins/pixel-agents` and run by a fake Obsidian host: a child Node process (`e2e/fixtures/obsidian-host.cjs`, isolated `HOME` and `USERPROFILE`) that stubs only the `obsidian` module, runs `onload`, opens the office view and prints the iframe URL, which Playwright then opens. Covers a privileged (not read-only) office with `+ Agent` disabled and its reason shown, a hook-driven agent adopted with watch-all on by default, closing the last view stopping the office (health unreachable, registry entry gone), a window reload that does not await `onunload` (old office down, one new office), and a same-PID entry left by a renderer that died without unloading never being reused.
+The built plugin (`dist/obsidian`, from `npm run build:obsidian`) copied into a temp vault's `.obsidian/plugins/pixel-agents` and run by a fake Obsidian host: a child Node process (`e2e/fixtures/obsidian-host.cjs`, isolated `HOME` and `USERPROFILE`) that stubs only the `obsidian` module, runs `onload`, opens the office view and prints the iframe URL, which Playwright then opens. Covers a privileged (not read-only) office with the New agent button disabled and its reason shown, a hook-driven agent adopted with watch-all on by default, closing the last view stopping the office (health unreachable, registry entry gone), a window reload that does not await `onunload` (old office down, one new office), and a same-PID entry left by a renderer that died without unloading never being reused.
 
 ### Pet system (`@area:pets`)
 
@@ -313,7 +313,7 @@ This section is auto-generated. Do not edit between the markers; CI fails on dri
 
 ### `@area:obsidian` (5 tests)
 
-- `e2e/obsidian/office.spec.ts:19` — opening the view serves a privileged office whose + Agent says why it is unavailable (Obsidian / office)
+- `e2e/obsidian/office.spec.ts:19` — opening the view serves a privileged office whose New agent button says why it is unavailable (Obsidian / office)
 - `e2e/obsidian/office.spec.ts:47` — an agent whose hook arrives is adopted and shown without any setting (Obsidian / office)
 - `e2e/obsidian/office.spec.ts:65` — closing the last view stops the office and removes its registry entry (Obsidian / office)
 - `e2e/obsidian/office.spec.ts:84` — a window reload that does not await unload stops the old office and starts one new one (Obsidian / office)

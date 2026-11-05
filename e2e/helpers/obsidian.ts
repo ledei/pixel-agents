@@ -123,7 +123,9 @@ export async function launchObsidian(page: Page): Promise<ObsidianSession> {
     const viewUrl = await waitForLine(() => stdout, /OBSIDIAN_VIEW_URL (\S+)\s/, 'the view URL');
     const hookServerConfig = await waitForHookServer(tmpHome);
     await page.goto(viewUrl);
-    await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
 
     const serversDir = path.join(tmpHome, '.pixel-agents', 'servers');
     return {
