@@ -14,6 +14,8 @@ import {
   MAX_PORT,
   MIN_PORT,
   TERMINAL_DISABLED_BY_FLAG_REASON,
+  TERMINAL_KILL_GRACE_MS,
+  TERMINAL_SHUTDOWN_SLACK_MS,
   WILDCARD_HOSTNAMES,
 } from './constants.js';
 import { hostDirectory } from './hostDirectory.js';
@@ -210,8 +212,10 @@ async function main(): Promise<void> {
       if (shuttingDown) process.exit(1);
       shuttingDown = true;
       console.log('\nShutting down...');
-      // A request stuck mid-flight must not hold the exit: cap the close.
-      await Promise.race([office.stop(), new Promise((r) => setTimeout(r, 3_000).unref())]);
+      // A request stuck mid-flight must not hold the exit: cap the close, past
+      // the terminals' own kill budget so the server still gets to close.
+      const cap = TERMINAL_KILL_GRACE_MS + TERMINAL_SHUTDOWN_SLACK_MS + 1_000;
+      await Promise.race([office.stop(), new Promise((r) => setTimeout(r, cap).unref())]);
       process.exit(0);
     }
 
