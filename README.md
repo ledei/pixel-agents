@@ -129,7 +129,7 @@ npm install && npm run build
 
 Copy `dist/obsidian/` to `<vault>/.obsidian/plugins/pixel-agents/`, then enable **Pixel Agents** in **Settings → Community plugins**. Click the bot icon in the ribbon or run the **Open office** command. The office starts with the view and stops when you close it.
 
-Obsidian has no terminal to launch agents in, so the **New agent** (+) button is unavailable: start Claude Code in your own terminal and it appears. **Watch All Sessions** is on by default, since the vault is the only Directory the office knows.
+Obsidian has no terminal to launch agents in, so the **New agent** (+) button is unavailable: start Claude Code in your own terminal and it appears. **Watch All Sessions** is on by default, since the vault is the only Directory the office knows: every Claude Code session on this machine shows up, not only those in the vault. Turn it off in Settings to see only the vault's.
 
 The first time you use the office it asks in the Intro whether to install the hooks (instant detection). Add or remove them later in the office's **Settings → Instant Detection (Hooks)**, and remove them there before deleting the plugin, since they live in your agent tool's settings file.
 
