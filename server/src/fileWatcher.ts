@@ -542,6 +542,14 @@ function adoptTerminalForFile(
 /** Known teammate JSONL files (prevents re-adoption). */
 const knownTeammateFiles = new Set<string>();
 
+/** Forget per-runtime module state so the next AgentRuntime starts clean: a
+ *  stale known-teammate set would skip still-running teammates, and the /clear
+ *  deps would stay pinned to the disposed runtime's maps. */
+export function resetFileWatcherRuntimeState(): void {
+  knownTeammateFiles.clear();
+  clearDetectionDeps = null;
+}
+
 /** Callback to remove a teammate agent when detected as dismissed via team config. */
 let teammateRemovalCallback: ((teammateAgentId: number) => void) | null = null;
 

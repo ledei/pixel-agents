@@ -258,10 +258,32 @@ describe('PixelAgentsServer', () => {
     });
     const entry = JSON.parse(fs.readFileSync(path.join(registryDir, registryFiles()[0]), 'utf-8'));
     expect(entry.standalone).toEqual({
+      namespace: 'standalone',
       terminal: true,
       host: '127.0.0.1',
       allowedHosts: ['a.example', 'b.example'],
     });
+  });
+
+  // An Obsidian office and `npx pixel-agents --no-terminal` have identical access
+  // but serve different host Directories and settings: neither may reuse the other.
+  it('does not reuse a server across settings namespaces', async () => {
+    const config1 = await server.start({ embedded: false, namespace: 'obsidian' });
+    const other = new PixelAgentsServer();
+    const config2 = await other.start({ embedded: false });
+    expect(config2.port).not.toBe(config1.port);
+    other.stop();
+  });
+
+  it('treats a registry entry without a namespace as standalone', async () => {
+    const config1 = await server.start({ embedded: false });
+    const file = path.join(registryDir, registryFiles()[0]);
+    const entry = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    delete entry.standalone.namespace;
+    fs.writeFileSync(file, JSON.stringify(entry));
+    const same = new PixelAgentsServer();
+    expect((await same.start({ embedded: false })).port).toBe(config1.port);
+    same.stop();
   });
 
   it('reuses only when the allowed hosts match (order and case aside)', async () => {

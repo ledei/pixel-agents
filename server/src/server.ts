@@ -11,6 +11,7 @@ import type {
   ReloadAssetsSideEffect,
   SetHooksEnabledSideEffect,
 } from './clientMessageHandler.js';
+import type { ConfigNamespace } from './configPersistence.js';
 import {
   SERVER_JSON_DIR,
   SERVER_JSON_NAME,
@@ -88,6 +89,8 @@ export class PixelAgentsServer {
      *  the old one. Refused while another standalone server is running: it
      *  would keep honouring the old token until it restarts. */
     rotateToken?: boolean;
+    /** Settings namespace of the host starting this server (standalone only). */
+    namespace?: ConfigNamespace;
     /** The Directory this host contributes (see ClientMessageContext.hostDirectory). */
     hostDirectory?: HostDirectoryEntry | null;
   }): Promise<ServerConfig> {
@@ -97,6 +100,7 @@ export class PixelAgentsServer {
     const standalone: StandaloneAccess | undefined = embedded
       ? undefined
       : {
+          namespace: options?.namespace ?? 'standalone',
           terminal: options?.ptyManager?.enabled ?? false,
           host,
           allowedHosts: normalizedAllowedHosts(options?.allowedHosts ?? []),
@@ -116,7 +120,7 @@ export class PixelAgentsServer {
       const running = registry.find((e) => e.servesSpa);
       if (running) {
         throw new Error(
-          `A standalone server is already running (PID ${running.pid}, port ${running.port}) and would keep accepting the old token. Stop it, then run --rotate-token again.`,
+          `A Pixel Agents server that serves the office is already running (PID ${running.pid}, port ${running.port}) and would keep accepting the old token. Stop it, then run --rotate-token again.`,
         );
       }
     }

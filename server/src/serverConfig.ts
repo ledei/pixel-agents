@@ -1,3 +1,4 @@
+import type { ConfigNamespace } from './configPersistence.js';
 import { MAX_PORT, MIN_PORT, SERVER_REGISTRY_PROTOCOL_VERSION } from './constants.js';
 
 /** Minimum fields the hook producer needs to contact a server. Kept separate
@@ -17,6 +18,10 @@ export interface ServerTarget {
  * `--host` would be silently ignored in favour of a server that has a shell.
  */
 export interface StandaloneAccess {
+  /** Settings namespace of the host that started it: an Obsidian office and the
+   *  CLI serve different host Directories and settings, so never share a server.
+   *  Absent on an entry written before this field existed: read as 'standalone'. */
+  namespace?: ConfigNamespace;
   /** Whether the browser may launch agents and attach to their terminals. */
   terminal: boolean;
   /** Bind address. */
@@ -46,6 +51,7 @@ export function sameStandaloneAccess(
 ): boolean {
   if (running === undefined || wanted === undefined) return running === wanted;
   return (
+    (running.namespace ?? 'standalone') === (wanted.namespace ?? 'standalone') &&
     running.terminal === wanted.terminal &&
     running.host === wanted.host &&
     running.allowedHosts.length === wanted.allowedHosts.length &&
@@ -56,6 +62,7 @@ export function sameStandaloneAccess(
 function isStandaloneAccess(value: unknown): value is StandaloneAccess {
   return (
     isRecord(value) &&
+    (value.namespace === undefined || typeof value.namespace === 'string') &&
     typeof value.terminal === 'boolean' &&
     typeof value.host === 'string' &&
     Array.isArray(value.allowedHosts) &&
