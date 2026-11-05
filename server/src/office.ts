@@ -249,6 +249,7 @@ export async function startOffice(options: OfficeOptions): Promise<Office> {
       packageRoot,
       allowedHosts: options.allowedHosts,
       rotateToken: options.rotateToken,
+      namespace: options.namespace,
       hostDirectory: options.hostDirectory,
     });
     currentConfig = { port: config.port, token: config.token };
@@ -285,7 +286,7 @@ export async function startOffice(options: OfficeOptions): Promise<Office> {
       }
       if (!consent) {
         log.log(
-          '[Pixel Agents] Hooks not installed: modifying ~/.claude/settings.json needs one-time approval — open the URL below to review and approve it.',
+          '[Pixel Agents] Hooks not installed: modifying ~/.claude/settings.json needs one-time approval — approve it in the office.',
         );
       } else if (copyHookScriptOrReport(packageRoot, log)) {
         try {

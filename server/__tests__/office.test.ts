@@ -127,6 +127,15 @@ describe.skipIf(!fs.existsSync(path.join(DIST_ROOT, 'webview')))('startOffice', 
     await expect(fetch(new URL('/api/health', second.url))).rejects.toThrow();
   });
 
+  it('a standalone office and an obsidian office with the same access each own a server', async () => {
+    const obsidian = await start();
+    const standalone = await start({ namespace: 'standalone' });
+
+    expect(obsidian.ownsServer).toBe(true);
+    expect(standalone.ownsServer).toBe(true);
+    expect(standalone.config.port).not.toBe(obsidian.config.port);
+  });
+
   describe('host Directory', () => {
     // Host Directories are listed only while the namespace's Show setting is on.
     beforeEach(() => seedConfig({ obsidian: { showHostDirectories: true } }));

@@ -24,6 +24,7 @@ import {
   ensureProjectScan,
   isTrackedProjectDir,
   reassignAgentToFile,
+  resetFileWatcherRuntimeState,
   scanForBackgroundAgentFiles,
   scanForTeammateFiles,
   setAgentRemovalCallback,
@@ -620,5 +621,6 @@ export class AgentRuntime {
     }
 
     for (const id of this.store.keys()) this.stopWatching(id);
+    resetFileWatcherRuntimeState();
   }
 }

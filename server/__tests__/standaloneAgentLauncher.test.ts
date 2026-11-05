@@ -275,6 +275,18 @@ describe('launchStandaloneAgent', () => {
     expect(broadcasts).toHaveLength(0);
   });
 
+  it('returns null when neither a Directory path nor a host Directory is given', () => {
+    const harness = workingPtyManager();
+
+    const id = launchStandaloneAgent(
+      { store, runtime, ptyManager: harness.manager, provider: provider(), hostDirectory: null },
+      {},
+    );
+
+    expect(id).toBeNull();
+    expect(harness.spawnArgs).toHaveLength(0);
+  });
+
   it('returns null when the provider cannot build a launch command', () => {
     const harness = workingPtyManager();
 
