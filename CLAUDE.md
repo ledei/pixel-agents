@@ -1,12 +1,12 @@
 # Pixel Agents — Compressed Reference
 
-Pixel art office where AI agents (Claude Code terminals today, any tool tomorrow) become animated characters. Ships as a **VS Code extension** and an **`npx pixel-agents` standalone CLI** from the same source tree.
+Pixel art office where AI agents (Claude Code terminals today, any tool tomorrow) become animated characters. Ships as a **VS Code extension**, an **`npx pixel-agents` standalone CLI** and an **Obsidian plugin** from the same source tree.
 
 `CONTEXT.md` is the canonical glossary — read it for what terms like Agent, Sub-agent, Teammate, Lead, Adopt, or Headless agent mean here, and use its vocabulary in code, comments, and docs.
 
 ## Architecture
 
-Strict layering: `core/` depends on nothing; `server/` depends only on `core/`; `webview-ui/` depends only on `core/`; `adapters/vscode/` depends on `core/` and `server/`. The standalone CLI never imports `adapters/vscode/` and vice versa.
+Strict layering: `core/` depends on nothing; `server/` depends only on `core/`; `webview-ui/` depends only on `core/`; `adapters/vscode/` and `adapters/obsidian/` depend on `core/` and `server/`. The standalone CLI never imports `adapters/vscode/` or `adapters/obsidian/`, and neither adapter imports the other.
 
 ```
 core/                                Protocol + interface definitions (zero runtime side effects)
@@ -42,9 +42,10 @@ server/                              Lifecycle runtime + Fastify HTTP/WS server
     httpServer.ts                    Fastify: POST /api/hooks/:providerId, GET /api/health, GET /ws, SPA (standalone)
     clientMessageHandler.ts          Single dispatch point for ClientMessage from webview
     server.ts                        Top-level composition
-    cli.ts                           npx pixel-agents entry (npm bin)
+    office.ts                        startOffice(): the shared composition (assets, store, runtime, server, hooks, scanning) for standalone and Obsidian; never reads process.cwd() or exits
+    cli.ts                           npx pixel-agents entry (npm bin): args, URL printing, signals, exit
     fileStateAdapter.ts              Namespaced ~/.pixel-agents/ persistence
-    configPersistence.ts             { vscode, standalone, externalAssetDirectories, hooksConsent: {providerId: granted|declined}, hooksEnabled: {providerId: boolean} }
+    configPersistence.ts             { vscode, standalone, obsidian, externalAssetDirectories, hooksConsent: {providerId: granted|declined}, hooksEnabled: {providerId: boolean} }
     layoutPersistence.ts             ~/.pixel-agents/layout.json with atomic tmp+rename
     fileWatcher.ts                   Hybrid fs.watch + 500ms polling, JSONL line buffering, /clear detection
     transcriptParser.ts              JSONL parsing for heuristic / file-fallback mode
@@ -64,6 +65,13 @@ adapters/vscode/                     VS Code surface — composes core + server
   uninstall.ts                       vscode:uninstall hook — removes hook entries + factory-resets hooks config after extension removal
   migrateVsCodeState.ts              One-time legacy state migration (verify-before-clear)
   constants.ts                       VS Code IDs, command names, key names
+
+adapters/obsidian/                   Obsidian plugin — composes core + server in-process via startOffice
+  main.ts                            Plugin: view, ribbon icon, command; onunload stops the office
+  officeView.ts                      ItemView: iframe to the tokened office URL, status/error text
+  officeLifecycle.ts                 Start once for N open views, stop on last close; no `obsidian` import (unit-testable)
+  constants.ts                       View type, icon, command, namespace, terminal-unavailable reason
+  manifest.json, styles.css          Copied into the plugin folder by scripts/assemble-obsidian-plugin.mjs
 
 webview-ui/                          React 19 + Canvas UI (depends only on core/)
   src/
@@ -193,10 +201,12 @@ webview-ui/                          npm workspace
 
 ## Distribution
 
-Two artifacts from one source tree:
+Three artifacts from one source tree:
 
 - **VS Code extension** (`.vsix`) — `pablodelucca.pixel-agents` on VS Code Marketplace and Open VSX. Bundles VS Code adapter + webview SPA + assets + hook scripts.
 - **npm package** (`pixel-agents`) — `npx pixel-agents [--port 3100]` runs the Fastify server and serves the SPA on the same port. Bundles CLI + webview SPA + assets + hook scripts + `core/asyncapi.yaml` (so third-party clients can regenerate from it).
+
+- **Obsidian plugin** (`dist/obsidian/`) — `npm run build` assembles `main.js`, `manifest.json`, `styles.css` and a `dist/{assets,webview,hooks}` folder; copy it to `<vault>/.obsidian/plugins/pixel-agents/`. Not published to a store and not in the npm tarball.
 
 `package.json:files` allowlist controls the npm tarball: `dist/cli.js{,.map}`, `dist/webview/`, `dist/assets/`, `dist/hooks/`, `core/asyncapi.yaml`, `icon.png`. `dist/extension.js` is intentionally excluded since the VS Code entry ships through the `.vsix`.
 
@@ -294,7 +304,7 @@ Teammate dismissal is driven by team config polling (`getTeamMembers(teamName)` 
 
 ## Server Runtime
 
-`AgentRuntime` (`server/src/agentRuntime.ts`) is the shared lifecycle core. Both surfaces (`adapters/vscode/PixelAgentsViewProvider.ts` and `server/src/cli.ts`) compose the same runtime; only the `StateAdapter` namespace, `MessageTransport`, and `TerminalAdapter` differ.
+`AgentRuntime` (`server/src/agentRuntime.ts`) is the shared lifecycle core. All three adapters compose the same runtime; only the `StateAdapter` namespace, `MessageTransport`, and `TerminalAdapter` differ. `startOffice` (`server/src/office.ts`) is the shared composition for standalone (`server/src/cli.ts`) and Obsidian (`adapters/obsidian/main.ts`); the host passes the scan dir and host Directory, and `stop()` never exits the process. VS Code still composes its own embedded server in `PixelAgentsViewProvider.ts`.
 
 ```typescript
 export class AgentRuntime {
@@ -356,15 +366,16 @@ Per-agent runtime data: provider reference, session key, transcript-fallback fie
 
 ```
 ~/.pixel-agents/
-  config.json              { vscode, standalone, externalAssetDirectories, hooksConsent, hooksEnabled (both per-provider) }
+  config.json              { vscode, standalone, obsidian, externalAssetDirectories, hooksConsent, hooksEnabled (both per-provider) }
   vscode-state.json        { agents, seats }
   standalone-state.json    { agents, seats }
+  obsidian-state.json      { agents, seats }
   layout.json              OfficeLayout (shared across surfaces)
   server.json              { port, pid, authToken }
   hooks/claude-hook.js     Bundled hook script (CJS, shebang)
 ```
 
-`FileStateAdapter({ namespace })` backs both runtimes. Per-namespace settings: `soundEnabled`, `lastSeenVersion`, `alwaysShowLabels`, `watchAllSessions`, `hooksInfoShown` (the hooks preference is per-provider and machine-global, at the config top level). Running both surfaces in parallel never clobbers either.
+`FileStateAdapter({ namespace })` backs both runtimes. Per-namespace settings: `soundEnabled`, `lastSeenVersion`, `alwaysShowLabels`, `watchAllSessions`, `hooksInfoShown` (the hooks preference is per-provider and machine-global, at the config top level). `NAMESPACE_DEFAULTS` (`configPersistence.ts`) is the one place a namespace differs: `obsidian` defaults `watchAllSessions` to true (the vault is the host Directory and the office exists to observe agents running elsewhere). Running the surfaces in parallel never clobbers either.
 
 `migrateVsCodeState` (VS Code adapter only) walks each known legacy key once with **verify-before-clear** semantics: write to file, read back, only then clear the legacy key. While anything remains unmigrated, activation shows a non-blocking warning.
 
@@ -561,11 +572,12 @@ npm test                   # webview + server vitest
 npm run e2e                # Playwright
 ```
 
-`esbuild.js` runs three bundles:
+`esbuild.js` runs four bundles:
 
 1. **Extension** (`dist/extension.js`) from `adapters/vscode/extension.ts`. External: `vscode`.
 2. **CLI** (`dist/cli.js`) from `server/src/cli.ts`. Externals pulled at install time (`fastify`, `@fastify/*`).
 3. **Hook scripts** (`dist/hooks/claude-hook.js`) from `server/src/providers/hook/claude/hooks/claude-hook.ts`. CJS, shebang.
+4. **Obsidian plugin** (`dist/obsidian/main.js`, `node esbuild.js --obsidian`) from `adapters/obsidian/main.ts`. CJS, node platform, Fastify inlined. External: `obsidian`, `electron`, the PTY modules. `npm run build:obsidian` then runs `scripts/assemble-obsidian-plugin.mjs`, which needs the full build's `dist/assets`, `dist/hooks` and `dist/webview`.
 
 `define: { 'process.env.PIXEL_AGENTS_VERSION': JSON.stringify(version) }` stamps the package version into all bundles.
 
@@ -662,7 +674,7 @@ Supporting: `wall-tile-editor.html` (wall sprite editing), `jsonl-viewer.html` (
 
 ## Key Decisions
 
-- **Layered codebase** (core → server → adapters; core → webview-ui). Standalone CLI never imports `adapters/vscode/` and vice versa.
+- **Layered codebase** (core → server → adapters; core → webview-ui). Standalone CLI and the two adapters never import each other.
 - **AsyncAPI 3.0 contract**, generated TS bindings, CI drift check. Single source of truth for the wire protocol.
 - **AgentRuntime** shared lifecycle core, composed by both surfaces.
 - **AgentStateStore** as single source of truth with typed mutations and typed events. No transport calls outside the broadcast layer.
@@ -670,6 +682,8 @@ Supporting: `wall-tile-editor.html` (wall sprite editing), `jsonl-viewer.html` (
 - **HookProvider** as the integration boundary, with optional file fallback. New CLIs are a single subdirectory under `server/src/providers/hook/<id>/`.
 - **TeamProvider** as optional extension. Claude Agent Teams is the only implementation.
 - **Per-adapter namespaced persistence** under `~/.pixel-agents/`. VS Code and standalone never clobber each other.
+- **Obsidian runs in-process, without an embedded terminal.** The PTY is a native module that does not load in Obsidian's Electron, so `PtySessionManager.disabled(reason)` is passed and "+ Agent" is unavailable with that reason; agents started in the user's own terminal are adopted.
+- **A registry entry carrying our own PID is live only while its port is served by this process.** An Electron renderer reload keeps the PID but drops every server, so a PID check alone would reuse a dead entry (`server.ts`). The plugin also stops its server on unload.
 - **Verify-before-clear migration** for legacy VS Code state.
 - **Single `WebviewViewProvider`** (panel area, not editor area).
 - **Inline esbuild problem matcher** (no extra extension needed).
