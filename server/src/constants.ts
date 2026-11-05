@@ -163,6 +163,8 @@ export const TERMINAL_DEFAULT_LANG = 'en_US.UTF-8';
 export const TERMINAL_KILL_GRACE_MS = 2_000;
 /** How long shutdown waits past the SIGKILL escalation for the exits to land. */
 export const TERMINAL_SHUTDOWN_SLACK_MS = 1_000;
+/** How long the CLI's shutdown cap leaves the server to close once the terminals are done. */
+export const SERVER_CLOSE_SLACK_MS = 1_000;
 
 // ── PTY host (development only: `pixel-agents --pty-host`) ──
 /** The host exits after this long with no terminal and no server connected. */

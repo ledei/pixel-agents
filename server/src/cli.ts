@@ -14,6 +14,7 @@ import {
   MAX_PORT,
   MIN_PORT,
   PTY_HOST_SCRIPT,
+  SERVER_CLOSE_SLACK_MS,
   TERMINAL_DISABLED_BY_FLAG_REASON,
   TERMINAL_KILL_GRACE_MS,
   TERMINAL_SHUTDOWN_SLACK_MS,
@@ -277,7 +278,7 @@ async function main(): Promise<void> {
       console.log('\nShutting down...');
       // A request stuck mid-flight must not hold the exit: cap the close, past
       // the terminals' own kill budget so the server still gets to close.
-      const cap = TERMINAL_KILL_GRACE_MS + TERMINAL_SHUTDOWN_SLACK_MS + 1_000;
+      const cap = TERMINAL_KILL_GRACE_MS + TERMINAL_SHUTDOWN_SLACK_MS + SERVER_CLOSE_SLACK_MS;
       await Promise.race([office.stop(), new Promise((r) => setTimeout(r, cap).unref())]);
       process.exit(0);
     }
