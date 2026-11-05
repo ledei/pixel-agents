@@ -23,9 +23,9 @@ import { createAgentState } from '../agentState.js';
 import type { AgentStateStore } from '../agentStateStore.js';
 import { JSONL_POLL_INTERVAL_MS } from '../constants.js';
 import { clearContextUsage } from '../contextUsage.js';
-import { directoryAt } from '../directories.js';
+import { directoryAt, type HostDirectoryEntry } from '../directories.js';
 import { startFileWatching } from '../fileWatcher.js';
-import { directoryNameFor, hostDirectory } from '../hostDirectory.js';
+import { directoryNameFor } from '../hostDirectory.js';
 import { assignPaletteIfNeeded } from '../paletteAssigner.js';
 import type { AgentState } from '../types.js';
 import { inheritedEnv, terminalEnv } from './terminalEnv.js';
@@ -36,11 +36,13 @@ export interface LaunchStandaloneAgentDeps {
   runtime: AgentRuntime;
   ptyManager: TerminalSessions;
   provider: HookProvider;
+  /** The host's own Directory: the default launch target, and the name an
+   *  agent launched into it gets. Null when the host contributes none. */
+  hostDirectory: HostDirectoryEntry | null;
 }
 
 export interface LaunchStandaloneAgentOptions {
-  /** Path of the Directory to launch into. Defaults to the server's cwd, which
-   *  is also the Directory standalone contributes as its host entry. */
+  /** Path of the Directory to launch into. Defaults to the host Directory. */
   directoryPath?: string;
   /** Read from the host's persisted permission posture by the caller; never a
    *  per-launch choice made in the office. */
@@ -64,14 +66,18 @@ export function launchStandaloneAgent(
   deps: LaunchStandaloneAgentDeps,
   options: LaunchStandaloneAgentOptions = {},
 ): number | null {
-  const { store, runtime, ptyManager, provider } = deps;
+  const { store, runtime, ptyManager, provider, hostDirectory } = deps;
 
   if (!ptyManager.isAvailable()) {
     console.error(`[Pixel Agents] Terminal: cannot launch -- ${ptyManager.unavailableReason()}`);
     return null;
   }
 
-  const cwd = options.directoryPath ?? process.cwd();
+  const cwd = options.directoryPath ?? hostDirectory?.path;
+  if (!cwd) {
+    console.error('[Pixel Agents] Terminal: cannot launch -- no Directory given');
+    return null;
+  }
   const sessionId = options.resume?.sessionId ?? crypto.randomUUID();
 
   const launch = provider.buildLaunchCommand?.(sessionId, cwd, {
@@ -96,7 +102,7 @@ export function launchStandaloneAgent(
   const id = store.nextAgentId.current++;
 
   // The Directory launched into, if the cwd is one: its name and its default characters.
-  const directory = directoryAt(cwd, [hostDirectory()]);
+  const directory = directoryAt(cwd, hostDirectory ? [hostDirectory] : []);
   const agent = createAgentState({
     id,
     sessionId,

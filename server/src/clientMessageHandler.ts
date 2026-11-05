@@ -35,7 +35,6 @@ import {
   listDirectories,
 } from './directories.js';
 import { collectDirectorySuggestions } from './directorySuggestions.js';
-import { hostDirectory } from './hostDirectory.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
 import { getPaletteCount } from './paletteAssigner.js';
 import type { ConsentEffects } from './providers/hook/consentExecutor.js';
@@ -49,7 +48,7 @@ import { applyUsageBridgeChoice, usageSnapshotMessages } from './usageLimits.js'
 
 type WsSend = (message: Record<string, unknown>) => void;
 
-/** Async hook toggle side effect (install/uninstall + script copy). Provided by cli.ts. */
+/** Async hook toggle side effect (install/uninstall + script copy). Provided by office.ts. */
 export type SetHooksEnabledSideEffect = (
   providerId: string,
   enabled: boolean,
@@ -57,7 +56,7 @@ export type SetHooksEnabledSideEffect = (
 
 /**
  * Reload server-side assets after an external-asset-directory change and
- * re-broadcast the updated sprites to the requesting client. Provided by cli.ts,
+ * re-broadcast the updated sprites to the requesting client. Provided by office.ts,
  * which owns the dist root needed to re-run the loaders.
  */
 export type ReloadAssetsSideEffect = (send: WsSend) => Promise<void> | void;
@@ -77,9 +76,9 @@ export interface ClientMessageContext {
   store: AgentStateStore;
   runtime?: AgentRuntime;
   cache: AssetCache | null;
-  /** Install/uninstall hooks side effect. Needs server url+token known only to cli.ts. */
+  /** Install/uninstall hooks side effect. Needs server url+token known only to office.ts. */
   onSetHooksEnabled?: SetHooksEnabledSideEffect;
-  /** Reload assets after an external-asset-directory change. Needs the dist root, known only to cli.ts. */
+  /** Reload assets after an external-asset-directory change. Needs the dist root, known only to office.ts. */
   onReloadAssets?: ReloadAssetsSideEffect;
   /**
    * Whether this client may change ANYTHING. An unprivileged client is
@@ -96,6 +95,9 @@ export interface ClientMessageContext {
   /** PTY terminals for standalone-launched agents. Absent in VS Code embedded
    *  mode, where the editor owns terminal lifecycle. */
   ptyManager?: TerminalSessions;
+  /** The Directory this host contributes (standalone: its start directory).
+   *  Absent or null contributes none. */
+  hostDirectory?: HostDirectoryEntry | null;
 }
 
 // ── Setting key constants (mirror adapters/vscode/constants.ts) ──
@@ -108,6 +110,7 @@ const KEY_HOOKS_INFO_SHOWN = 'pixel-agents.hooksInfoShown';
 const KEY_SHOW_AREAS = 'pixel-agents.showAreas';
 const KEY_BYPASS_PERMISSIONS = 'pixel-agents.bypassPermissions';
 const KEY_SHOW_HOST_DIRECTORIES = 'pixel-agents.showHostDirectories';
+const KEY_AREA_MAPPINGS = 'pixel-agents.areaMappings';
 
 /** The provider whose conversations the sidebar lists and resumes: the first
  *  that names them and can launch (HookProvider.conversationTitle). */
@@ -116,13 +119,13 @@ const conversationProvider = hookProviders.find(
 );
 
 /**
- * This host's own Directory contribution: the directory the server was started
- * from. Gated on ptyManager for the same reason directoriesLoaded is — no
- * ptyManager means VS Code embedded mode, whose adapter contributes its
- * workspace folders instead and must not have this server's cwd added to them.
+ * This host's own Directory contribution. Gated on ptyManager for the same
+ * reason directoriesLoaded is — no ptyManager means VS Code embedded mode,
+ * whose adapter contributes its workspace folders instead and must not have
+ * this server's entry added to them.
  */
 function hostDirectoriesFor(ctx: ClientMessageContext): HostDirectoryEntry[] {
-  return ctx.ptyManager ? [hostDirectory()] : [];
+  return ctx.ptyManager && ctx.hostDirectory ? [ctx.hostDirectory] : [];
 }
 
 /**
@@ -182,10 +185,16 @@ export function handleClientMessage(
       // Permission posture is a persisted per-host setting, never a per-launch
       // field: the client sends only where to launch. Every launch comes from a
       // drawer row and carries its Directory's path; no directoryPath falls
-      // back to the server cwd (launchStandaloneAgent's own default).
+      // back to the host Directory (launchStandaloneAgent's own default).
       const picked = rosterPick(msg.palette, getPaletteCount());
       const launched = launchStandaloneAgent(
-        { store, runtime, ptyManager: ctx.ptyManager, provider: claudeProvider },
+        {
+          store,
+          runtime,
+          ptyManager: ctx.ptyManager,
+          provider: claudeProvider,
+          hostDirectory: ctx.hostDirectory ?? null,
+        },
         {
           directoryPath: msg.directoryPath as string | undefined,
           bypassPermissions: adapter?.getSetting(KEY_BYPASS_PERMISSIONS, false) ?? false,
@@ -236,7 +245,13 @@ export function handleClientMessage(
       const resume = resumeRequest(store, conversationProvider, msg);
       if (!resume) break;
       launchStandaloneAgent(
-        { store, runtime, ptyManager: ctx.ptyManager, provider: conversationProvider },
+        {
+          store,
+          runtime,
+          ptyManager: ctx.ptyManager,
+          provider: conversationProvider,
+          hostDirectory: ctx.hostDirectory ?? null,
+        },
         {
           directoryPath: resume.directoryPath,
           bypassPermissions: adapter?.getSetting(KEY_BYPASS_PERMISSIONS, false) ?? false,
@@ -438,9 +453,7 @@ export function handleClientMessage(
       if (!rawMappings || typeof rawMappings !== 'object') {
         break;
       }
-      const cfg = readConfig();
-      cfg.standalone.areaMappings = rawMappings as Record<string, string[]>;
-      writeConfig(cfg);
+      adapter?.setSetting(KEY_AREA_MAPPINGS, rawMappings);
       break;
     }
 
@@ -647,7 +660,6 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   // after agent creation with no characters.
 
   // 4. Settings (from adapter, with sensible defaults when adapter is absent)
-  const cfg = readConfig();
   const settings = settingsSnapshot(adapter);
   const { watchAllSessions, hooksEnabled } = settings;
   send(settings);
@@ -697,11 +709,11 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   // webview seat-preference logic has the dict when characters are created).
   send({
     type: 'areaMappingsLoaded',
-    mappings: cfg.standalone.areaMappings ?? {},
+    mappings: areaMappingsOf(adapter),
   });
 
   // 4c. Directories: the user-defined ones from the shared config merged with
-  // standalone's native context, the directory the server was started from —
+  // the host's own Directory (standalone: the directory it was started from) —
   // one read-only host entry, the counterpart of VS Code contributing its
   // workspace folders. Gated on ptyManager for the same reason
   // terminalAvailability is: no ptyManager means VS Code embedded mode, whose
@@ -780,6 +792,11 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
  * client whose setting change was refused (refuseReadOnly), so its optimistic
  * toggle snaps back to the truth.
  */
+/** This host's Directory→Area mappings, from its own settings namespace. */
+function areaMappingsOf(adapter: StateAdapter | undefined): Record<string, string[]> {
+  return adapter?.getSetting<Record<string, string[]>>(KEY_AREA_MAPPINGS, {}) ?? {};
+}
+
 function settingsSnapshot(adapter: StateAdapter | undefined) {
   return {
     type: 'settingsLoaded',
@@ -853,7 +870,7 @@ function refuseReadOnly(
       send(cardOrderMessage(ctx.store.getAdapter()));
       return;
     case 'saveAreaMappings':
-      send({ type: 'areaMappingsLoaded', mappings: readConfig().standalone.areaMappings ?? {} });
+      send({ type: 'areaMappingsLoaded', mappings: areaMappingsOf(ctx.store.getAdapter()) });
       return;
     case 'saveCharacterProfiles':
       // Answered like any refused save, so the editor drops the edit instead of keeping it.

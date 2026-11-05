@@ -14,6 +14,7 @@ import {
 import { getHooksEnabled, readConfig, setHooksEnabled } from '../src/configPersistence.js';
 import { MAX_CHARACTER_REPEAT, TERMINAL_REQUIRES_TOKEN_REASON } from '../src/constants.js';
 import { FileStateAdapter } from '../src/fileStateAdapter.js';
+import { hostDirectory } from '../src/hostDirectory.js';
 import { getPaletteCount, setExternalCharacterCount } from '../src/paletteAssigner.js';
 import { claudeProvider } from '../src/providers/hook/claude/claude.js';
 import { CLAUDE_HOOK_EVENTS } from '../src/providers/hook/claude/constants.js';
@@ -896,7 +897,7 @@ describe('clientMessageHandler: standalone terminal control plane', () => {
    *  every happy path below is what a client that opened the CLI's URL sees.
    *  The untokened cases pass `privileged: false` explicitly. */
   function ctx(overrides: Partial<ClientMessageContext> = {}): ClientMessageContext {
-    return { store, cache: null, privileged: true, ...overrides };
+    return { store, cache: null, privileged: true, hostDirectory: hostDirectory(), ...overrides };
   }
 
   function dispatch(msg: Record<string, unknown>, context: ClientMessageContext): void {

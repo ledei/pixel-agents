@@ -294,7 +294,13 @@ describe('PTY host', () => {
       const before = office();
       const first = await connect();
       const id = launchStandaloneAgent(
-        { store: before.store, runtime: before.runtime, ptyManager: first, provider: provider() },
+        {
+          store: before.store,
+          runtime: before.runtime,
+          ptyManager: first,
+          provider: provider(),
+          hostDirectory: null,
+        },
         { directoryPath: dir, palette: 2 },
       );
       expect(id).toBe(1);
@@ -313,6 +319,7 @@ describe('PTY host', () => {
         runtime: after.runtime,
         ptyManager: second,
         provider: provider(),
+        hostDirectory: null,
       });
 
       expect(restored).toEqual([1]);
@@ -335,7 +342,13 @@ describe('PTY host', () => {
       const before = office();
       const first = await connect();
       launchStandaloneAgent(
-        { store: before.store, runtime: before.runtime, ptyManager: first, provider: provider() },
+        {
+          store: before.store,
+          runtime: before.runtime,
+          ptyManager: first,
+          provider: provider(),
+          hostDirectory: null,
+        },
         { directoryPath: dir },
       );
       const launched = before.store.get(1)!;
@@ -356,6 +369,7 @@ describe('PTY host', () => {
         runtime: after.runtime,
         ptyManager: second,
         provider: { ...provider(), getAllSessionRoots: () => [dir] },
+        hostDirectory: null,
       });
 
       const agent = after.store.get(1);
@@ -372,7 +386,13 @@ describe('PTY host', () => {
       const before = office();
       const first = await connect();
       launchStandaloneAgent(
-        { store: before.store, runtime: before.runtime, ptyManager: first, provider: provider() },
+        {
+          store: before.store,
+          runtime: before.runtime,
+          ptyManager: first,
+          provider: provider(),
+          hostDirectory: null,
+        },
         { directoryPath: dir },
       );
       const launched = before.store.get(1)!;
@@ -424,6 +444,7 @@ describe('PTY host', () => {
         runtime: after.runtime,
         ptyManager: second,
         provider: { ...provider(), getAllSessionRoots: () => [dir] },
+        hostDirectory: null,
       });
 
       const agent = after.store.get(1);
@@ -437,7 +458,13 @@ describe('PTY host', () => {
       const before = office();
       const first = await connect();
       launchStandaloneAgent(
-        { store: before.store, runtime: before.runtime, ptyManager: first, provider: provider() },
+        {
+          store: before.store,
+          runtime: before.runtime,
+          ptyManager: first,
+          provider: provider(),
+          hostDirectory: null,
+        },
         { directoryPath: dir },
       );
       await until(() => spawned.length === 1);
@@ -452,6 +479,7 @@ describe('PTY host', () => {
         runtime: after.runtime,
         ptyManager: second,
         provider: provider(),
+        hostDirectory: null,
       });
       expect(restored).toEqual([]);
       expect(after.store.has(1)).toBe(false);
