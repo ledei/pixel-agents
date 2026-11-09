@@ -65,7 +65,7 @@ export const register: Register = (on) => {
             }
             const health = await $.http.fetch(`http://127.0.0.1:${server.port}/api/health`);
             const answered = JSON.parse(health.text);
-            if (health.ok && answered?.ok === true && answered.pid === server.pid) {
+            if (health.ok && answered?.status === 'ok' && answered.pid === server.pid) {
               servers.set(server.port, server.token);
             }
           } catch {
