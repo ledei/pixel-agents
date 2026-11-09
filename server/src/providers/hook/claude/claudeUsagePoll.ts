@@ -23,12 +23,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { PIXEL_AGENTS_DIR } from '../../../constants.js';
 import { isRecord } from '../../../serverConfig.js';
 import {
   CLAUDE_USAGE_POLL_ARGS,
   CLAUDE_USAGE_POLL_BINARY_ENV,
-  CLAUDE_USAGE_POLL_DIR_NAME,
   CLAUDE_USAGE_POLL_TIMEOUT_MS,
 } from './constants.js';
 
@@ -48,19 +46,6 @@ function binaryCandidates(): string[] {
 
 function claudeBinary(): string {
   return binaryCandidates().find((p) => fs.existsSync(p)) ?? 'claude';
-}
-
-/** A folder only this user can write, so nothing planted there (settings, an
- *  .mcp.json) can reach the run. Null when it cannot be made. */
-function privateWorkingDir(): string | null {
-  const dir = path.join(os.homedir(), PIXEL_AGENTS_DIR, CLAUDE_USAGE_POLL_DIR_NAME);
-  try {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    fs.chmodSync(dir, 0o700);
-    return dir;
-  } catch {
-    return null;
-  }
 }
 
 function windowOf(raw: unknown): { used_percentage: number; resets_at: number } | undefined {
@@ -96,8 +81,6 @@ export function usageReportFromStreamLine(line: string): Record<string, unknown>
  *  (no CLI, not logged in, no event in time): the bars just keep their last
  *  report. Never rejects. */
 export function pollClaudeUsage(): Promise<Record<string, unknown> | null> {
-  const cwd = privateWorkingDir();
-  if (!cwd) return Promise.resolve(null);
   return new Promise((resolve) => {
     let settled = false;
     let buffer = '';
@@ -109,7 +92,7 @@ export function pollClaudeUsage(): Promise<Record<string, unknown> | null> {
       resolve(value);
     };
     const child = spawn(claudeBinary(), [...CLAUDE_USAGE_POLL_ARGS], {
-      cwd,
+      cwd: os.tmpdir(),
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     const timer = setTimeout(() => done(null), CLAUDE_USAGE_POLL_TIMEOUT_MS);

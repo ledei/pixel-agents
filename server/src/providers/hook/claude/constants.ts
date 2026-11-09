@@ -119,17 +119,6 @@ export const CLAUDE_USAGE_POLL_ARGS: readonly string[] = [
   'stream-json',
   '--verbose',
   '--no-session-persistence',
-  // Only the user's own settings: a project or local settings file (or an
-  // .mcp.json) in the working directory must never load into this run.
-  '--setting-sources',
-  'user',
   '--settings',
   '{"disableAllHooks":true}',
-  '--strict-mcp-config',
-  '--mcp-config',
-  '{"mcpServers":{}}',
-  '--tools',
-  '',
 ];
-/** The run's private working directory, under ~/.pixel-agents (mode 0700). */
-export const CLAUDE_USAGE_POLL_DIR_NAME = 'usage-poll';
