@@ -20,11 +20,15 @@ const adapterDir = path.join(root, 'adapters', 'obsidian');
 const pluginDir = path.join(dist, 'obsidian');
 const pluginDist = path.join(pluginDir, 'dist');
 
+// Every script the server installs into ~/.pixel-agents/hooks/ (the hook script
+// and the usage bars' status line bridge): a missing one fails the toggle.
+const hookScripts = ['claude-hook.js', 'claude-statusline.js'];
+
 const required = [
   path.join(pluginDir, 'main.js'),
   path.join(dist, 'assets'),
   path.join(dist, 'webview', 'index.html'),
-  path.join(dist, 'hooks', 'claude-hook.js'),
+  ...hookScripts.map((name) => path.join(dist, 'hooks', name)),
 ];
 const missing = required.filter((p) => !fs.existsSync(p));
 if (missing.length > 0) {
@@ -40,10 +44,9 @@ fs.rmSync(pluginDist, { recursive: true, force: true });
 fs.cpSync(path.join(dist, 'assets'), path.join(pluginDist, 'assets'), { recursive: true });
 fs.cpSync(path.join(dist, 'webview'), path.join(pluginDist, 'webview'), { recursive: true });
 fs.mkdirSync(path.join(pluginDist, 'hooks'), { recursive: true });
-fs.copyFileSync(
-  path.join(dist, 'hooks', 'claude-hook.js'),
-  path.join(pluginDist, 'hooks', 'claude-hook.js'),
-);
+for (const name of hookScripts) {
+  fs.copyFileSync(path.join(dist, 'hooks', name), path.join(pluginDist, 'hooks', name));
+}
 fs.copyFileSync(path.join(adapterDir, 'styles.css'), path.join(pluginDir, 'styles.css'));
 
 // The plugin version is the package version, stamped here so it cannot drift.
