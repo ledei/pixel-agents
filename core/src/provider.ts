@@ -117,10 +117,6 @@ export interface UsageBridge {
   /** The reporting session's context from the same POST; null when it
    *  carries none (before the session's first response) or is malformed. */
   normalizeContext(raw: unknown): ReportedContext | null;
-  /** Optional: ask the CLI for the account's limits directly, for sessions that
-   *  never run the bridge script (a headless host). Resolves a report in the
-   *  shape `normalizeReport` reads, or null; never rejects. */
-  poll?(): Promise<unknown>;
 }
 
 // ── Hook-based Provider (CLIs with hooks APIs) ────────────────

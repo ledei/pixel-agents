@@ -240,8 +240,3 @@ export const NEW_CONVERSATION_TITLE = 'New conversation';
 /** Most agent ids a saved card order keeps. The order is pruned to live agents
  *  on every save, so this only bounds a hand-edited or hostile payload. */
 export const MAX_CARD_ORDER_LENGTH = 1_000;
-
-/** How often the office asks a provider for its plan usage directly. */
-export const USAGE_POLL_INTERVAL_MS = 5 * 60_000;
-/** First poll after the server starts. */
-export const USAGE_POLL_FIRST_DELAY_MS = 5_000;

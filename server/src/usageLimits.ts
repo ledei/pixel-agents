@@ -119,12 +119,6 @@ export function recordUsageReport(
   return true;
 }
 
-/** How old a provider's last report is (Infinity when there is none). */
-export function usageAgeMs(providerId: string, now: number = Date.now()): number {
-  const entry = stored()[providerId];
-  return entry ? now - entry.updatedAt : Number.POSITIVE_INFINITY;
-}
-
 /** The `usageLimits` message for a provider (no windows when none is known). */
 export function usageLimitsMessage(providerId: string): UsageLimits {
   const entry = stored()[providerId];
