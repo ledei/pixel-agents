@@ -38,24 +38,39 @@ export const register: Register = (on) => {
       if (typeof command !== 'string' || !command.includes(BRIDGE_MARKER)) return next(e);
 
       // Every live server: the registry, else the legacy single server.json.
+      // A token only goes to a server that answers /api/health (no credentials)
+      // with the pid its entry names: a stale entry's port may belong to
+      // another process by now.
       const dir = `${home}/.pixel-agents`;
-      const files = [`${dir}/server.json`];
+      const registry: string[] = [];
       try {
         for (const entry of await $.fs.list(`${dir}/servers`)) {
-          if (entry.name.endsWith('.json')) files.push(`${dir}/servers/${entry.name}`);
+          if (entry.name.endsWith('.json')) registry.push(`${dir}/servers/${entry.name}`);
         }
       } catch {
-        // no registry: server.json is all there is
+        // no registry
       }
       const servers = new Map<number, string>();
-      for (const file of files) {
-        try {
-          const server = JSON.parse(await $.fs.read(file));
-          if (typeof server.port === 'number' && typeof server.token === 'string') {
-            servers.set(server.port, server.token);
+      for (const files of [registry, [`${dir}/server.json`]]) {
+        if (servers.size > 0) break; // the legacy file only when no registry entry is live
+        for (const file of files) {
+          try {
+            const server = JSON.parse(await $.fs.read(file));
+            if (
+              typeof server.port !== 'number' ||
+              typeof server.token !== 'string' ||
+              typeof server.pid !== 'number'
+            ) {
+              continue;
+            }
+            const health = await $.http.fetch(`http://127.0.0.1:${server.port}/api/health`);
+            const answered = JSON.parse(health.text);
+            if (health.ok && answered?.ok === true && answered.pid === server.pid) {
+              servers.set(server.port, server.token);
+            }
+          } catch {
+            // unreadable, or nothing (or not us) behind the port: skip it
           }
-        } catch {
-          // unreadable entry: skip it
         }
       }
 
