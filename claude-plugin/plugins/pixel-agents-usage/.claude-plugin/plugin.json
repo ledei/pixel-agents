@@ -1,0 +1,8 @@
+{
+  "name": "pixel-agents-usage",
+  "version": "0.1.0",
+  "description": "Feeds Pixel Agents' usage bars with this session's plan rate limits, desktop app included.",
+  "author": {
+    "name": "Pixel Agents"
+  }
+}

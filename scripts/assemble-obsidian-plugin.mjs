@@ -28,6 +28,7 @@ const required = [
   path.join(pluginDir, 'main.js'),
   path.join(dist, 'assets'),
   path.join(dist, 'webview', 'index.html'),
+  path.join(dist, 'claude-plugin', '.claude-plugin', 'marketplace.json'),
   ...hookScripts.map((name) => path.join(dist, 'hooks', name)),
 ];
 const missing = required.filter((p) => !fs.existsSync(p));
@@ -43,6 +44,9 @@ if (missing.length > 0) {
 fs.rmSync(pluginDist, { recursive: true, force: true });
 fs.cpSync(path.join(dist, 'assets'), path.join(pluginDist, 'assets'), { recursive: true });
 fs.cpSync(path.join(dist, 'webview'), path.join(pluginDist, 'webview'), { recursive: true });
+fs.cpSync(path.join(dist, 'claude-plugin'), path.join(pluginDist, 'claude-plugin'), {
+  recursive: true,
+});
 fs.mkdirSync(path.join(pluginDist, 'hooks'), { recursive: true });
 for (const name of hookScripts) {
   fs.copyFileSync(path.join(dist, 'hooks', name), path.join(pluginDist, 'hooks', name));

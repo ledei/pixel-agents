@@ -37,6 +37,18 @@ function copyAssets() {
 }
 
 /**
+ * Copy the Claude Code plugin Pixel Agents installs for Usage Bars
+ * (claude-plugin/, a marketplace holding the usage mod) to dist/claude-plugin.
+ */
+function copyClaudePlugin() {
+  const srcDir = path.join(__dirname, 'claude-plugin');
+  const dstDir = path.join(__dirname, 'dist', 'claude-plugin');
+  fs.rmSync(dstDir, { recursive: true, force: true });
+  fs.cpSync(srcDir, dstDir, { recursive: true });
+  console.log('✓ Copied claude-plugin/ → dist/claude-plugin/');
+}
+
+/**
  * Bundle hook scripts (TypeScript) to dist/hooks via esbuild.
  * Produces a self-contained CJS file with shebang for Claude Code to execute.
  */
@@ -108,6 +120,7 @@ async function main() {
     await ctx.dispose();
     // Copy assets and hooks after build
     copyAssets();
+    copyClaudePlugin();
     buildHooks();
     await buildCli();
     await buildPtyHost();

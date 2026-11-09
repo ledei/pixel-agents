@@ -40,6 +40,7 @@
     "dist/hooks/claude-statusline.js",
     "dist/uninstall.js",
     "dist/assets/",
+    "dist/claude-plugin/",
     "dist/webview/",
     "icon.png"
   ],

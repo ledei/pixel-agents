@@ -100,3 +100,13 @@ export const CLAUDE_SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Task', 'Agen
 export const CONVERSATION_TITLE_SCAN_BYTES = 256 * 1024;
 /** A title longer than this is cut, with an ellipsis. */
 export const CONVERSATION_TITLE_MAX_CHARS = 120;
+
+// ── Usage mod (a Claude Code plugin installed with Usage Bars) ──
+/** The bundled marketplace (dist/claude-plugin) is copied here, and Claude Code reads it in place. */
+export const CLAUDE_PLUGIN_DIR_NAME = 'claude-plugin';
+export const USAGE_MOD_MARKETPLACE = 'pixel-agents';
+export const USAGE_MOD_PLUGIN = 'pixel-agents-usage';
+/** Env override for the `claude` binary the plugin commands run. */
+export const CLAUDE_BINARY_ENV = 'PIXEL_AGENTS_CLAUDE_BIN';
+/** One `claude plugin …` command gives up after this long. */
+export const CLAUDE_CLI_TIMEOUT_MS = 60_000;

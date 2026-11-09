@@ -30,6 +30,7 @@ import type {
   UsageBridge,
 } from '../../../../../core/src/provider.js';
 import { isRecord } from '../../../serverConfig.js';
+import { copyUsageModMarketplace, installUsageMod, uninstallUsageMod } from './claudeUsageMod.js';
 import { SETTINGS_BACKUP_SUFFIX } from './constants.js';
 import {
   installStatusLineBridge,
@@ -46,6 +47,9 @@ export const USAGE_BRIDGE_DISCLOSURE = [
     `settings.json${SETTINGS_BACKUP_SUFFIX}.`,
   "Only your usage percentages and reset times, and each session's context percentage, are sent, " +
     'to the Pixel Agents server on this machine.',
+  'The desktop app never draws a status line, so Pixel Agents also installs a small Claude Code ' +
+    'plugin, "pixel-agents-usage" (`claude plugin install`, user scope), that sends the same ' +
+    'percentages from every session, desktop app included.',
   'You can turn this off at any time from Settings → Usage Bars.',
 ].join('\n\n');
 
@@ -83,12 +87,37 @@ export function normalizeClaudeContextReport(raw: unknown): ReportedContext | nu
   return { sessionId, usedPercentage: Math.min(100, Math.max(0, used)), windowTokens: size };
 }
 
+/** The status line bridge, then the plugin. A plugin that cannot install (no
+ *  `claude` on the path, an old version) leaves the bridge working for
+ *  terminal sessions, so it is logged, not thrown. */
+async function installBridge(packageRoot: string): Promise<void> {
+  await installStatusLineBridge(packageRoot);
+  try {
+    await installUsageMod(packageRoot);
+  } catch (e) {
+    console.warn(
+      `[Pixel Agents] Usage plugin not installed: ${e instanceof Error ? e.message : e}`,
+    );
+  }
+}
+
+async function uninstallBridge(): Promise<void> {
+  await uninstallStatusLineBridge();
+  await uninstallUsageMod();
+}
+
+/** A new version ships new scripts and a new plugin copy. */
+function refreshBridge(packageRoot: string): void {
+  refreshStatusLineScript(packageRoot);
+  if (isStatusLineBridgeInstalled()) copyUsageModMarketplace(packageRoot);
+}
+
 export const claudeUsageBridge: UsageBridge = {
   disclosure: USAGE_BRIDGE_DISCLOSURE,
   isInstalled: isStatusLineBridgeInstalled,
-  install: installStatusLineBridge,
-  uninstall: uninstallStatusLineBridge,
-  refreshScript: refreshStatusLineScript,
+  install: installBridge,
+  uninstall: uninstallBridge,
+  refreshScript: refreshBridge,
   normalizeReport: normalizeClaudeUsageReport,
   normalizeContext: normalizeClaudeContextReport,
 };

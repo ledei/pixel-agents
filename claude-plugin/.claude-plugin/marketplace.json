@@ -1,0 +1,12 @@
+{
+  "name": "pixel-agents",
+  "description": "Claude Code plugins that ship with Pixel Agents.",
+  "owner": { "name": "Pixel Agents" },
+  "plugins": [
+    {
+      "name": "pixel-agents-usage",
+      "source": "./plugins/pixel-agents-usage",
+      "description": "Feeds Pixel Agents' usage bars with the plan rate limits of every Claude Code session, the desktop app included."
+    }
+  ]
+}
