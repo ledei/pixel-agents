@@ -30,6 +30,7 @@ import type {
   UsageBridge,
 } from '../../../../../core/src/provider.js';
 import { isRecord } from '../../../serverConfig.js';
+import { pollClaudeUsage } from './claudeUsagePoll.js';
 import { SETTINGS_BACKUP_SUFFIX } from './constants.js';
 import {
   installStatusLineBridge,
@@ -46,6 +47,9 @@ export const USAGE_BRIDGE_DISCLOSURE = [
     `settings.json${SETTINGS_BACKUP_SUFFIX}.`,
   "Only your usage percentages and reset times, and each session's context percentage, are sent, " +
     'to the Pixel Agents server on this machine.',
+  'Sessions with no status line (the Claude desktop app) report nothing, so every few minutes ' +
+    'Pixel Agents also starts one short, hook-free, unsaved `claude` run (Haiku) to read your ' +
+    'limits. It uses your existing Claude Code login and counts as a few tokens of usage.',
   'You can turn this off at any time from Settings → Usage Bars.',
 ].join('\n\n');
 
@@ -91,4 +95,5 @@ export const claudeUsageBridge: UsageBridge = {
   refreshScript: refreshStatusLineScript,
   normalizeReport: normalizeClaudeUsageReport,
   normalizeContext: normalizeClaudeContextReport,
+  poll: pollClaudeUsage,
 };

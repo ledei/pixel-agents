@@ -38,6 +38,8 @@ import type { ServerConfig } from './server.js';
 import { PixelAgentsServer } from './server.js';
 import { reattachTerminalAgents } from './terminal/standaloneAgentLauncher.js';
 import type { TerminalSessions } from './terminal/terminalSessions.js';
+import { recordUsageReport, usageLimitsMessage } from './usageLimits.js';
+import { startUsagePoller, type UsagePoller } from './usagePoller.js';
 
 type OfficeLog = Pick<Console, 'log' | 'error'>;
 
@@ -125,9 +127,11 @@ export async function startOffice(options: OfficeOptions): Promise<Office> {
   const server = new PixelAgentsServer();
   const runtime = new AgentRuntime(store, claudeProvider);
 
+  let usagePoller: UsagePoller | undefined;
   let stopping: Promise<void> | null = null;
   const stop = (): Promise<void> => {
     stopping ??= (async () => {
+      usagePoller?.stop();
       // In process: kill child terminals and wait for them (each exit closes
       // its agent): exiting now would cancel the SIGKILL escalation and leave
       // a child that ignores SIGHUP orphaned on a dead server. With the PTY
@@ -257,6 +261,11 @@ export async function startOffice(options: OfficeOptions): Promise<Office> {
     // An installed usage bridge runs the script from ~/.pixel-agents/hooks/:
     // bring it up to this version's copy.
     for (const provider of hookProviders) provider.usageBridge?.refreshScript(packageRoot);
+    // Sessions with no status line (the desktop app) never run that script:
+    // ask the CLI for the limits directly while the bridge is on.
+    usagePoller = startUsagePoller(hookProviders, (provider, raw) => {
+      if (recordUsageReport(provider, raw)) store.broadcast({ ...usageLimitsMessage(provider.id) });
+    });
 
     // Sync runtime refs with persisted settings BEFORE first scan tick. The
     // runtime's single hooksEnabled ref follows the Claude provider until the

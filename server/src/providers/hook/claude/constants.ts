@@ -100,3 +100,25 @@ export const CLAUDE_SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Task', 'Agen
 export const CONVERSATION_TITLE_SCAN_BYTES = 256 * 1024;
 /** A title longer than this is cut, with an ellipsis. */
 export const CONVERSATION_TITLE_MAX_CHARS = 120;
+
+// ── Usage poll (sessions with no status line) ───────────────
+/** Env override for the `claude` binary the usage poll runs. */
+export const CLAUDE_USAGE_POLL_BINARY_ENV = 'PIXEL_AGENTS_CLAUDE_BIN';
+/** The poll gives up after this long and keeps the last report. */
+export const CLAUDE_USAGE_POLL_TIMEOUT_MS = 30_000;
+/** The headless run: smallest model, one turn, hooks off (it must not appear
+ *  in the office or run the user's hooks), nothing saved to disk. */
+export const CLAUDE_USAGE_POLL_ARGS: readonly string[] = [
+  '-p',
+  '.',
+  '--model',
+  'haiku',
+  '--max-turns',
+  '1',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+  '--no-session-persistence',
+  '--settings',
+  '{"disableAllHooks":true}',
+];
